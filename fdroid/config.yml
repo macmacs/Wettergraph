@@ -1,0 +1,13 @@
+repo_url: https://macmacs.github.io/AF-Weather-Widget/fdroid/repo
+repo_name: AF Weather Widget
+repo_description: >-
+  F-Droid repository for the AF Weather Widget fork maintained by macmacs.
+  Signed release builds are published here on every tagged version.
+repo_icon: icon.png
+
+archive_older: 0
+
+keystore: {env: KEYSTORE_PATH}
+repo_keyalias: repo
+keystorepass: {env: KEYSTORE_PASSWORD}
+keypass: {env: KEYSTORE_PASSWORD}

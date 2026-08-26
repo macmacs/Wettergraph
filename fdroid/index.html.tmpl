@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AF Weather Widget - F-Droid repo</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    max-width: 42rem;
+    margin: 0 auto;
+    padding: 2rem 1.25rem;
+    line-height: 1.6;
+  }
+  code, .url {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.9em;
+    word-break: break-all;
+  }
+  .url {
+    display: block;
+    padding: 0.75rem;
+    border: 1px solid currentColor;
+    border-radius: 6px;
+    opacity: 0.9;
+  }
+  .btn {
+    display: inline-block;
+    margin: 1rem 0;
+    padding: 0.6rem 1.1rem;
+    border: 1px solid currentColor;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  footer { margin-top: 3rem; font-size: 0.85em; opacity: 0.7; }
+</style>
+</head>
+<body>
+
+<h1>AF Weather Widget</h1>
+<p>F-Droid repository with signed release builds of the
+<a href="https://github.com/macmacs/AF-Weather-Widget">AF Weather Widget</a> fork.</p>
+
+<h2>Add the repo</h2>
+<p>With F-Droid installed, tap the button on your phone:</p>
+<p><a class="btn" href="fdroidrepos://macmacs.github.io/AF-Weather-Widget/fdroid/repo?fingerprint=__FINGERPRINT__">Add to F-Droid</a></p>
+
+<p>Or add this URL manually under <em>Settings &rarr; Repositories</em>:</p>
+<span class="url">https://macmacs.github.io/AF-Weather-Widget/fdroid/repo</span>
+
+<h2>Verify the fingerprint</h2>
+<p>The repository signing key fingerprint (SHA-256) is:</p>
+<span class="url">__FINGERPRINT__</span>
+
+<footer>
+<p>Upstream project: <a href="https://github.com/Gitsaibot/AF-Weather-Widget">Gitsaibot/AF-Weather-Widget</a>.
+Weather data by <a href="https://www.met.no/">MET Norway</a>, place search by
+<a href="https://www.geonames.org/">GeoNames</a>.</p>
+</footer>
+
+</body>
+</html>
