@@ -1,0 +1,304 @@
+package io.github.macmacs.af;
+
+import android.app.Activity;
+import android.app.PendingIntent;
+import android.appwidget.AppWidgetManager;
+import android.content.ContentUris;
+import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.preference.Preference;
+import androidx.preference.PreferenceFragmentCompat;
+
+import io.github.macmacs.af.location.AfLocationSelectionActivity;
+import io.github.macmacs.af.util.AfLocationInfo;
+import io.github.macmacs.af.util.AfWidgetInfo;
+
+public class AfPreferenceFragment extends PreferenceFragmentCompat implements
+        Preference.OnPreferenceChangeListener {
+
+    private static final String TAG = "AfPrefFragment";
+
+    public final static int EXIT_CONFIGURATION = 77;
+
+    private AfWidgetInfo mAfWidgetInfo = null;
+    private AfSettings mAfSettings = null;
+
+    private Button mAddWidgetButton;
+
+    private Preference mUiPref;
+    private Preference mUpdatePref;
+    private Preference mUnitPref;
+    private Preference mDeviceProfilePref;
+    private Preference mLocationPref;
+
+    private boolean mActionEdit = false;
+    private boolean mActivateCalibrationMode = false;
+
+    private ActivityResultLauncher<Intent> deviceProfileLauncher;
+    private ActivityResultLauncher<Intent> selectLocationLauncher;
+
+    @Override
+    public void onCreatePreferences(Bundle bundle, String s) {
+
+        addPreferencesFromResource(R.xml.preferences);
+
+        mUnitPref = findPreference("unit_preference");
+        mUiPref = findPreference("ui_preference");
+        mUpdatePref = findPreference("update_preference");
+        mDeviceProfilePref = findPreference("device_profile_preference");
+        mLocationPref = findPreference(getString(R.string.location_settings_key));
+        setupListeners();
+    }
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        deviceProfileLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == EXIT_CONFIGURATION) {
+                        mActivateCalibrationMode = true;
+
+                        boolean editMode = Intent.ACTION_EDIT.equals(getActivity().getIntent().getAction());
+
+                        if (editMode) {
+                            int activeCalibrationTarget = mAfSettings.getCalibrationTarget();
+
+                            boolean isProviderModified = mAfSettings.isProviderPreferenceModified();
+                            boolean globalSettingModified = mAfSettings.saveAllPreferences(mActivateCalibrationMode);
+
+                            if (activeCalibrationTarget != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                                // Redraw the currently active calibration widget
+                                AfWorkManager.enqueueWork(getContext(), new Intent(
+                                        AfWorker.ACTION_UPDATE_WIDGET)
+                                        .setData(ContentUris.withAppendedId(AfProvider.AfWidgets.CONTENT_URI, activeCalibrationTarget)));
+                            }
+
+                            Uri widgetUri = mAfWidgetInfo.getWidgetUri();
+
+                            if (isProviderModified || globalSettingModified) {
+                                AfWorkManager.enqueueWork(
+                                        getActivity().getApplicationContext(),
+                                        new Intent(isProviderModified
+                                                ? AfWorker.ACTION_UPDATE_ALL_PROVIDER_CHANGE
+                                                : AfWorker.ACTION_UPDATE_ALL)
+                                                .setData(widgetUri));
+                            } else {
+                                AfWorkManager.enqueueWork(
+                                        getActivity().getApplicationContext(),
+                                        new Intent(AfWorker.ACTION_UPDATE_WIDGET)
+                                                .setData(widgetUri));
+                            }
+
+                        }
+                    }
+                });
+
+        selectLocationLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                        Uri locationUri = Uri.parse(result.getData().getStringExtra("location"));
+                        try {
+                            AfLocationInfo afLocationInfo = AfLocationInfo.build(getActivity().getApplicationContext(), locationUri);
+                            mAfWidgetInfo.setViewInfo(afLocationInfo, AfProvider.AfViews.TYPE_DETAILED);
+                            Log.d(TAG, "onActivityResult(): locationInfo=" + afLocationInfo);
+                        } catch (Exception e) {
+                            Toast.makeText(getContext(), "Failed to set up location info", Toast.LENGTH_SHORT).show();
+                            Log.d(TAG, "onActivityResult(): Failed to get location data.");
+                            e.printStackTrace();
+                        }
+                    }
+                });
+
+        getActivity().setResult(Activity.RESULT_CANCELED);
+
+        if (getActivity().getIntent() == null || getActivity().getIntent().getAction() == null) {
+            Toast.makeText(getContext(), "Could not start configuration activity: Intent or action was null.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        mActionEdit = getActivity().getIntent().getAction().equals(Intent.ACTION_EDIT);
+
+        if (mActionEdit) {
+            Uri widgetUri = getActivity().getIntent().getData();
+
+            if (widgetUri == null) {
+                Toast.makeText(getContext(), "Could not start configuration activity: Data was null. Remove and recreate the widget.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            try {
+                mAfWidgetInfo = AfWidgetInfo.build(getContext(), widgetUri);
+            } catch (Exception e) {
+                Toast.makeText(getContext(), "Failed to get widget information from database. Try removing the widget and creating a new one.", Toast.LENGTH_SHORT).show();
+                e.printStackTrace();
+                return;
+            }
+        } else {
+            int appWidgetId = getActivity().getIntent().getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+
+            if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+                Toast.makeText(getContext(), "Could not start configuration activity: Missing AppWidgetId.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            AfUtils.deleteWidget(getContext(), appWidgetId);
+
+            mAfWidgetInfo = new AfWidgetInfo(appWidgetId, AfProvider.AfWidgets.SIZE_LARGE_TINY, null);
+
+            Log.d(TAG, "Commit=" + mAfWidgetInfo.commit(getContext()));
+        }
+
+        Log.d(TAG, "onCreate(): " + mAfWidgetInfo.toString());
+
+        mAfSettings = AfSettings.build(getContext(), mAfWidgetInfo);
+
+        if (mActionEdit) {
+            mAfSettings.initializePreferencesExistingWidget();
+        } else {
+            mAfSettings.initializePreferencesNewWidget();
+        }
+    }
+
+    @NonNull
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        LinearLayout v = (LinearLayout) super.onCreateView(inflater, container, savedInstanceState);
+
+        mAddWidgetButton = new Button(getActivity().getApplicationContext());
+        mAddWidgetButton.setText(mActionEdit ? getString(R.string.apply_changes) : getString(R.string.add_widget));
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT);
+        params.gravity = Gravity.BOTTOM;
+        params.topMargin = 50;
+
+        v.addView(mAddWidgetButton);
+        mAddWidgetButton.setLayoutParams(params);
+        mAddWidgetButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+
+                Context mContext = getActivity().getApplicationContext();
+
+                if (mAfWidgetInfo.getViewInfo() == null || mAfWidgetInfo.getViewInfo().getLocationInfo() == null) {
+                    Toast.makeText(mContext, getString(R.string.must_select_location), Toast.LENGTH_SHORT).show();
+
+                }
+
+                Log.d(TAG, "onClick(): " + mAfWidgetInfo.toString());
+                mAfWidgetInfo.commit(mContext);
+                Log.d(TAG, "onClick(): Committed=" + mAfWidgetInfo.toString());
+
+                boolean isProviderModified = mAfSettings.isProviderPreferenceModified();
+                boolean globalSettingModified = mAfSettings.saveAllPreferences(mActivateCalibrationMode);
+
+                PendingIntent configurationIntent = AfUtils.buildConfigurationIntent(mContext, mAfWidgetInfo.getWidgetUri());
+                AfUtils.updateWidgetRemoteViews(mContext, mAfWidgetInfo.getAppWidgetId(), getString(R.string.widget_loading), true, configurationIntent);
+
+                Uri widgetUri = mAfWidgetInfo.getWidgetUri();
+
+                if (isProviderModified || globalSettingModified) {
+                    AfWorkManager.enqueueWork(
+                            mContext,
+                            new Intent(isProviderModified
+                                    ? AfWorker.ACTION_UPDATE_ALL_PROVIDER_CHANGE
+                                    : AfWorker.ACTION_UPDATE_ALL)
+                                    .setData(widgetUri));
+                } else {
+                    AfWorkManager.enqueueWork(
+                            mContext,
+                            new Intent(AfWorker.ACTION_UPDATE_WIDGET).setData(widgetUri));
+                }
+
+                Intent resultIntent = new Intent();
+                resultIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, mAfWidgetInfo.getAppWidgetId());
+                getActivity().setResult(Activity.RESULT_OK, resultIntent);
+
+                if(getActivity() != null & !(mAfWidgetInfo.getViewInfo() == null || mAfWidgetInfo.getViewInfo().getLocationInfo() == null)) {
+                    getActivity().finish();
+                }
+
+            }
+        });
+
+        return v;
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        requireActivity().setTitle(getString(R.string.title_configure));
+    }
+
+    /**
+     * Sets up all the preference change listeners to use the specified listener.
+     */
+    private void setupListeners() {
+
+        mLocationPref.setOnPreferenceChangeListener(this);
+    }
+
+    @Override
+    public boolean onPreferenceChange(Preference preference, Object newValue) {
+
+        return false;
+    }
+
+    @Override
+    public boolean onPreferenceTreeClick(Preference preference) {
+
+        if (preference == mUnitPref) {
+            return super.onPreferenceTreeClick(preference);
+
+        } else if (preference == mUiPref) {
+            return super.onPreferenceTreeClick(preference);
+
+        } else if (preference == mUpdatePref) {
+            return super.onPreferenceTreeClick(preference);
+
+        } else if (preference == mDeviceProfilePref) {
+            Intent intent = new Intent(getContext(), AfDeviceProfileActivity.class);
+            intent.setAction(getActivity().getIntent().getAction());
+            intent.setData(mAfWidgetInfo.getWidgetUri());
+            deviceProfileLauncher.launch(intent);
+            return true;
+
+        } else if (preference == mLocationPref) {
+            Intent intent = new Intent(getContext(), AfLocationSelectionActivity.class);
+            selectLocationLauncher.launch(intent);
+            return true;
+        }
+
+        return false;
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+
+        String locationName = null;
+
+        if (mAfWidgetInfo.getViewInfo() != null && mAfWidgetInfo.getViewInfo().getLocationInfo() != null) {
+            AfLocationInfo locationInfo = mAfWidgetInfo.getViewInfo().getLocationInfo();
+            if (locationInfo != null && locationInfo.getTitle() != null) {
+                locationName = locationInfo.getTitle();
+            }
+        }
+        mLocationPref.setSummary(locationName);
+    }
+}

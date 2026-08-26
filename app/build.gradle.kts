@@ -18,11 +18,11 @@ fun getKey(key: String): String {
 }
 
 android {
-    namespace = "net.gitsaibot.af"
+    namespace = "io.github.macmacs.af"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "net.gitsaibot.af"
+        applicationId = "io.github.macmacs.af"
         minSdk = 29
         targetSdk = 36
         versionCode = 40
