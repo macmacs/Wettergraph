@@ -1,20 +1,20 @@
 import java.io.FileInputStream
-import java.io.FileNotFoundException
 import java.util.Properties
 
 plugins {
     id("com.android.application")
 }
 
-fun getKey(key: String): String {
+fun getKey(key: String, env: String): String {
     val fl = rootProject.file("key.properties")
     if (fl.exists()) {
         val properties = Properties()
         properties.load(FileInputStream(fl))
-        return properties.getProperty(key)
-    } else {
-        throw FileNotFoundException()
+        val value = properties.getProperty(key)
+        if (value != null) return value
     }
+    return System.getenv(env)
+        ?: throw GradleException("Missing '$key' in key.properties and no $env environment variable set.")
 }
 
 android {
@@ -27,9 +27,9 @@ android {
         targetSdk = 36
         versionCode = 40
         versionName = "4.0"
-        buildConfigField("String", "USER_AGENT", "\"" + getKey("user_agent") + "\"")
-        buildConfigField("String", "API_KEY", "\"" + getKey("apiKey") + "\"")
-        buildConfigField("String", "USER_GEONAMES", "\"" + getKey("user_geonames") + "\"")
+        buildConfigField("String", "USER_AGENT", "\"" + getKey("user_agent", "AF_USER_AGENT") + "\"")
+        buildConfigField("String", "API_KEY", "\"" + getKey("apiKey", "AF_API_KEY") + "\"")
+        buildConfigField("String", "USER_GEONAMES", "\"" + getKey("user_geonames", "AF_USER_GEONAMES") + "\"")
         multiDexEnabled = true
     }
 

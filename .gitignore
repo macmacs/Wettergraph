@@ -86,3 +86,5 @@ lint/tmp/
 ### Android Patch ###
 gen-external-apklibs
 output.json
+# API keys
+key.properties

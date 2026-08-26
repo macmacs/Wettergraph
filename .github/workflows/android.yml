@@ -30,6 +30,10 @@ jobs:
       - name: Validate Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v4
       - name: Build with Gradle
+        env:
+          AF_USER_AGENT: ${{ secrets.AF_USER_AGENT }}
+          AF_API_KEY: ${{ secrets.AF_API_KEY }}
+          AF_USER_GEONAMES: ${{ secrets.AF_USER_GEONAMES }}
         run: ./gradlew build
       - name: Upload APK
         uses: actions/upload-artifact@v4
