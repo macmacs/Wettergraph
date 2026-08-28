@@ -13,7 +13,7 @@
     <string name="location_list_context_title">Ort: %s</string>
     <string name="button_add_location">Standort hinzufügen</string>
     <string name="app_description">Wetter widget mit 24 Stunden Vorhersage im 4x1 Format.</string>
-    <string name="widget_loading">Lade AF…</string>
+    <string name="widget_loading">Lade Wettergraph…</string>
     <string name="quick_start">Schnellstart</string>
     <string name="provider_title">Datenquelle</string>
     <string name="system_settings_title">Update Einstellungen</string>

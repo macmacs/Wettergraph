@@ -3,8 +3,8 @@
 
     <string name="app_description">Weather widget showing detailed 24-hour forecasts in a 4x1 format.</string>
 
-    <string name="widget_name" translatable="false">AF Weather</string>
-    <string name="widget_loading">Loading AF...</string>
+    <string name="widget_name" translatable="false">Wettergraph</string>
+    <string name="widget_loading">Loading Wettergraph...</string>
 
     <string name="device_profile_guide_link" translatable="false">&lt;a href=\"https://github.com/Gitsaibot/AF-Weather-Widget/wiki/Device-Profiles/\"&gt;Device Profile Guide&lt;/a&gt;</string>
 
@@ -15,7 +15,7 @@
 	<string name="noaa">NOAA NWS data</string>
 
 	<!-- IntroText -->
-	<string name="intro_text">After installing AF, you must manually add the widget to your homescreen: When setting up a widget for the first time, the only thing which needs to be chosen is the location to view. The most recently saved settings will be used automatically when setting up a new widget. </string>
+	<string name="intro_text">After installing Wettergraph, you must manually add the widget to your homescreen: When setting up a widget for the first time, the only thing which needs to be chosen is the location to view. The most recently saved settings will be used automatically when setting up a new widget. </string>
 
 	<!-- Temperature graph -->
 	<string name="temperature_graph_text">The temperature graph shows the temperature for the coming 24 hours, starting at the next full hour from the current time. NB:
@@ -49,7 +49,7 @@
     	\n\u2022 Pressure data is not available.
     	\n\u2022 The time between samples varies from 1 to 6 hours.\n
 
-		\nYou can select the weather data source manually from the update settings within the AF configuration.
+		\nYou can select the weather data source manually from the update settings within the Wettergraph configuration.
 	</string>
 
 	<!-- InfoText -->
@@ -96,7 +96,7 @@
 
 	<string name="must_select_location">You must set a location</string>
 
-	<string name="title_configure">AF Weather: Configure widget</string>
+	<string name="title_configure">Wettergraph: Configure widget</string>
 	<string name="button_add_widget_label">Add widget</string>
 	
 	<string name="location_selector_no_items_title">No locations added</string>
