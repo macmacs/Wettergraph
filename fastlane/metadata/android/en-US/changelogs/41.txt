@@ -1,0 +1,4 @@
+- Renamed app to Wettergraph in labels and store metadata
+- Fixed crash when opening UI Settings
+- Removed leftover upstream Aix references
+- Corrected fork attribution in store description

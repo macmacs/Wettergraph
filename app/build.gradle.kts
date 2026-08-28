@@ -25,8 +25,8 @@ android {
         applicationId = "io.github.macmacs.af"
         minSdk = 29
         targetSdk = 36
-        versionCode = 40
-        versionName = "4.0"
+        versionCode = 41
+        versionName = "4.0.2"
         buildConfigField("String", "USER_AGENT", "\"" + getKey("user_agent", "WETTERGRAPH_USER_AGENT") + "\"")
         buildConfigField("String", "API_KEY", "\"" + getKey("apiKey", "WETTERGRAPH_API_KEY") + "\"")
         buildConfigField("String", "USER_GEONAMES", "\"" + getKey("user_geonames", "WETTERGRAPH_USER_GEONAMES") + "\"")
