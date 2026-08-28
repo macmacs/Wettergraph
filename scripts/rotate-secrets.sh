@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # rotate-secrets.sh - rotate the API credentials inherited from the upstream
-# AF-Weather-Widget repo.
+# Wettergraph repo.
 #
 # The upstream values (met.no user agent "AF@gitsaibot.net" and GeoNames
 # username "af_weather") are baked into git history, so every fork must
@@ -34,7 +34,7 @@ DRY_RUN=0
 YES=0
 USER_AGENT=""
 GEONAMES_USER=""
-CONTACT="https://github.com/macmacs/AF-Weather-Widget"
+CONTACT="https://github.com/macmacs/Wettergraph"
 
 usage() {
     sed -n '2,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -69,7 +69,7 @@ OLD_USER_AGENT="$(get_key user_agent)"
 OLD_GEONAMES="$(get_key user_geonames)"
 
 if [ -z "$USER_AGENT" ]; then
-    USER_AGENT="af-weather-widget-fork-$(random_token) ($CONTACT)"
+    USER_AGENT="wettergraph-fork-$(random_token) ($CONTACT)"
 fi
 if [ -z "$CONTACT" ] && [ -z "${USER_AGENT##*()}" ]; then
     echo "error: empty contact" >&2; exit 1

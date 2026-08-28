@@ -2,15 +2,15 @@
 
 #### Free, no ads and open source!
 
-[<img src="fastlane/metadata/en_fdroid.png" height="60" alt="Get it on F-Droid">](https://macmacs.github.io/AF-Weather-Widget/)
+[<img src="fastlane/metadata/en_fdroid.png" height="60" alt="Get it on F-Droid">](https://macmacs.github.io/Wettergraph/)
 This app is a fork of aix weather widget which is no longer actively developed. It is a compact graphical weather graph as a single row Android widget. The source code is made public domain as it may provide utility for others. Please respect the various APIs used by the app, and please modify the user agent if you are running a modified version of the app.
 
 ## F-Droid repository
 
 Signed release builds are published to a self-hosted F-Droid repository on GitHub Pages:
 
-* Landing page: <https://macmacs.github.io/AF-Weather-Widget/>
-* Repo URL: `https://macmacs.github.io/AF-Weather-Widget/fdroid/repo`
+* Landing page: <https://macmacs.github.io/Wettergraph/>
+* Repo URL: `https://macmacs.github.io/Wettergraph/fdroid/repo`
 * Signing fingerprint (SHA-256): `ACABB6F7BF481DB77CE009F761BD94C40E96FEB0DBFF28FFDF8747E6C1AF586B`
 
 Pushing a `v*` tag runs `.github/workflows/fdroid.yml`, which builds a signed release
