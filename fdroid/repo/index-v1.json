@@ -1,6 +1,6 @@
 {
   "repo": {
-    "timestamp": 1787915551000,
+    "timestamp": 1787916648000,
     "version": 20002,
     "name": "Wettergraph",
     "icon": "icon.png",
@@ -17,17 +17,17 @@
       "categories": [
         "Time"
       ],
-      "suggestedVersionName": "4.0",
-      "suggestedVersionCode": "40",
+      "suggestedVersionName": "4.0.2",
+      "suggestedVersionCode": "41",
       "issueTracker": "https://github.com/macmacs/Wettergraph/issues",
       "license": "CC0-1.0",
       "sourceCode": "https://github.com/macmacs/Wettergraph",
       "added": 1787911814000,
       "packageName": "io.github.macmacs.af",
-      "lastUpdated": 1787911814000,
+      "lastUpdated": 1787916648000,
       "localized": {
         "en-US": {
-          "description": "This app is a fork of AF Weather Widget which is no longer actively developed. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>",
+          "description": "This app is a fork of AF Weather Widget. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>",
           "icon": "icon_LHbDM9Bw7rH2Ejfn07vCmjIBHRVskRS8KuFZbrud25I=.png",
           "name": "Wettergraph",
           "phoneScreenshots": [
@@ -38,13 +38,53 @@
             "af_weather_warm.png"
           ],
           "summary": "Graph weather widget for Android",
-          "whatsNew": "- Added configurable graph range and wind panel with gusts and direction\n"
+          "whatsNew": "- Renamed app to Wettergraph in labels and store metadata\n- Fixed crash when opening UI Settings\n- Removed leftover upstream Aix references\n- Corrected fork attribution in store description\n"
         }
       }
     }
   ],
   "packages": {
     "io.github.macmacs.af": [
+      {
+        "added": 1787916648000,
+        "apkName": "io.github.macmacs.af_41.apk",
+        "hash": "32768dd31c33d8788b90b99ea22cdcfd064a089ba9422de6f0d77ed4159fb5b9",
+        "hashType": "sha256",
+        "minSdkVersion": 29,
+        "packageName": "io.github.macmacs.af",
+        "sig": "09a499896ab32eb9a09ef571bea41a4c",
+        "signer": "1d538b945d53b81b31357507e93412ce710342db8868da1ebf6a30b605e9c959",
+        "size": 14552702,
+        "targetSdkVersion": 36,
+        "uses-permission": [
+          [
+            "android.permission.INTERNET",
+            null
+          ],
+          [
+            "android.permission.ACCESS_NETWORK_STATE",
+            null
+          ],
+          [
+            "android.permission.WAKE_LOCK",
+            null
+          ],
+          [
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            null
+          ],
+          [
+            "android.permission.FOREGROUND_SERVICE",
+            null
+          ],
+          [
+            "io.github.macmacs.af.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+            null
+          ]
+        ],
+        "versionCode": 41,
+        "versionName": "4.0.2"
+      },
       {
         "added": 1787911814000,
         "apkName": "io.github.macmacs.af_40.apk",

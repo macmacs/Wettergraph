@@ -14,7 +14,7 @@
       }
     },
     "address": "https://macmacs.github.io/Wettergraph/fdroid/repo",
-    "timestamp": 1787915551000,
+    "timestamp": 1787916648000,
     "categories": {
       "Time": {
         "name": {
@@ -31,7 +31,7 @@
           "Time"
         ],
         "issueTracker": "https://github.com/macmacs/Wettergraph/issues",
-        "lastUpdated": 1787911814000,
+        "lastUpdated": 1787916648000,
         "license": "CC0-1.0",
         "sourceCode": "https://github.com/macmacs/Wettergraph",
         "screenshots": {
@@ -73,7 +73,7 @@
           "en-US": "Graph weather widget for Android"
         },
         "description": {
-          "en-US": "This app is a fork of AF Weather Widget which is no longer actively developed. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>"
+          "en-US": "This app is a fork of AF Weather Widget. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>"
         },
         "icon": {
           "en-US": {
@@ -85,6 +85,50 @@
         "preferredSigner": "1d538b945d53b81b31357507e93412ce710342db8868da1ebf6a30b605e9c959"
       },
       "versions": {
+        "32768dd31c33d8788b90b99ea22cdcfd064a089ba9422de6f0d77ed4159fb5b9": {
+          "added": 1787916648000,
+          "file": {
+            "name": "/io.github.macmacs.af_41.apk",
+            "sha256": "32768dd31c33d8788b90b99ea22cdcfd064a089ba9422de6f0d77ed4159fb5b9",
+            "size": 14552702
+          },
+          "manifest": {
+            "versionName": "4.0.2",
+            "versionCode": 41,
+            "usesSdk": {
+              "minSdkVersion": 29,
+              "targetSdkVersion": 36
+            },
+            "signer": {
+              "sha256": [
+                "1d538b945d53b81b31357507e93412ce710342db8868da1ebf6a30b605e9c959"
+              ]
+            },
+            "usesPermission": [
+              {
+                "name": "android.permission.INTERNET"
+              },
+              {
+                "name": "android.permission.ACCESS_NETWORK_STATE"
+              },
+              {
+                "name": "android.permission.WAKE_LOCK"
+              },
+              {
+                "name": "android.permission.RECEIVE_BOOT_COMPLETED"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE"
+              },
+              {
+                "name": "io.github.macmacs.af.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+              }
+            ]
+          },
+          "whatsNew": {
+            "en-US": "- Renamed app to Wettergraph in labels and store metadata\n- Fixed crash when opening UI Settings\n- Removed leftover upstream Aix references\n- Corrected fork attribution in store description\n"
+          }
+        },
         "47d8e6b339bf10805a59c48fa4c2f6b291ec3843d84c67e41318682c392200a9": {
           "added": 1787911814000,
           "file": {
