@@ -15,6 +15,17 @@
 		<item>4</item>
 	</string-array>
 
+	<string-array name="graph_time_range_readable">
+		<item>@string/graph_time_range_24h</item>
+		<item>@string/graph_time_range_48h</item>
+	</string-array>
+
+	<!-- Values are the number of hours themselves, not an index. -->
+	<string-array name="graph_time_range_code" translatable="false">
+		<item>24</item>
+		<item>48</item>
+	</string-array>
+
 	<string-array name="temperature_units_readable">
 		<item>@string/temperature_units_celsius</item>
 		<item>@string/temperature_units_fahrenheit</item>
@@ -33,6 +44,20 @@
 	<string-array name="precipitation_units_code" translatable="false">
 		<item>1</item>
 		<item>2</item>
+	</string-array>
+
+	<string-array name="wind_units_readable">
+		<item>@string/wind_units_ms</item>
+		<item>@string/wind_units_kmh</item>
+		<item>@string/wind_units_mph</item>
+		<item>@string/wind_units_kn</item>
+	</string-array>
+
+	<string-array name="wind_units_code" translatable="false">
+		<item>1</item>
+		<item>2</item>
+		<item>3</item>
+		<item>4</item>
 	</string-array>
 
 	<string-array name="preference_update_rates_readable">
