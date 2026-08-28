@@ -23,14 +23,14 @@ The workflow needs these repository secrets:
 | --- | --- |
 | `KEYSTORE_BASE64` | base64 of the release keystore (aliases `apk` and `repo`) |
 | `KEYSTORE_PASSWORD` | keystore and key password |
-| `AF_USER_AGENT` | met.no user agent |
-| `AF_API_KEY` | met.no API key |
-| `AF_USER_GEONAMES` | GeoNames username |
+| `WETTERGRAPH_USER_AGENT` | met.no user agent |
+| `WETTERGRAPH_API_KEY` | met.no API key |
+| `WETTERGRAPH_USER_GEONAMES` | GeoNames username |
 
 ## Building locally
 
 Copy `key.properties.example` to `key.properties` and fill in your own API
-credentials, or export `AF_USER_AGENT`, `AF_API_KEY` and `AF_USER_GEONAMES`.
+credentials, or export `WETTERGRAPH_USER_AGENT`, `WETTERGRAPH_API_KEY` and `WETTERGRAPH_USER_GEONAMES`.
 
 ## Acknowledgements
 

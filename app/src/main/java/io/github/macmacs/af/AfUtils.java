@@ -542,7 +542,7 @@ public class AfUtils {
 			e.printStackTrace();
 		}
 		
-		userAgent.append("https://github.com/Gitsaibot/AF-Weather-Widget;" + BuildConfig.USER_AGENT);
+		userAgent.append("; " + BuildConfig.USER_AGENT);
 
 		return userAgent.toString();
 	}

@@ -10,7 +10,7 @@
 #   1. rotates the met.no User-Agent in key.properties
 #   2. rotates the GeoNames username in key.properties
 #   3. updates the matching GitHub repository secrets used by
-#      .github/workflows/fdroid.yml (AF_USER_AGENT, AF_USER_GEONAMES)
+#      .github/workflows/fdroid.yml (WETTERGRAPH_USER_AGENT, WETTERGRAPH_USER_GEONAMES)
 #
 # Usage:
 #   scripts/rotate-secrets.sh [--user-agent VALUE] [--geonames-user VALUE]
@@ -120,11 +120,11 @@ if ! grep -q '^user_geonames=' "$KEY_PROPERTIES"; then echo "user_geonames=$GEON
 
 # 2. Update the GitHub repository secrets used by the workflow.
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-    gh secret set AF_USER_AGENT --body "$USER_AGENT"
-    gh secret set AF_USER_GEONAMES --body "$GEONAMES_USER"
+    gh secret set WETTERGRAPH_USER_AGENT --body "$USER_AGENT"
+    gh secret set WETTERGRAPH_USER_GEONAMES --body "$GEONAMES_USER"
 else
     echo "warning: gh CLI not available or not authenticated; skipping GitHub secrets."
-    echo "         Set them manually: AF_USER_AGENT, AF_USER_GEONAMES"
+    echo "         Set them manually: WETTERGRAPH_USER_AGENT, WETTERGRAPH_USER_GEONAMES"
 fi
 
 echo

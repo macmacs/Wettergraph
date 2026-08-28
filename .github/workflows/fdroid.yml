@@ -53,9 +53,9 @@ jobs:
 
       - name: Build signed release APK
         env:
-          AF_USER_AGENT: ${{ secrets.AF_USER_AGENT }}
-          AF_API_KEY: ${{ secrets.AF_API_KEY }}
-          AF_USER_GEONAMES: ${{ secrets.AF_USER_GEONAMES }}
+          WETTERGRAPH_USER_AGENT: ${{ secrets.WETTERGRAPH_USER_AGENT }}
+          WETTERGRAPH_API_KEY: ${{ secrets.WETTERGRAPH_API_KEY }}
+          WETTERGRAPH_USER_GEONAMES: ${{ secrets.WETTERGRAPH_USER_GEONAMES }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: apk
         run: ./gradlew --no-daemon assembleRelease
