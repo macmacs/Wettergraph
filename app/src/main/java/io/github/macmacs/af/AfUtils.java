@@ -644,7 +644,7 @@ public class AfUtils {
 		}
 		
 		return Uri.parse(String.format(US,
-				"content://" + BuildConfig.APPLICATION_ID + "/aixrender/%d/%d/%s",
+				"content://" + BuildConfig.APPLICATION_ID + "/render/%d/%d/%s",
 				appWidgetId, time, orientation));
 	}
 	

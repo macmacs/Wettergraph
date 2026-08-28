@@ -497,10 +497,10 @@ public class AfSettings {
 	
 	public void savePreferencesToProvider(Map<String, ?> settingsMap) {
 		ContentResolver resolver = mContext.getContentResolver();
-		Uri aixWidgetSettingsUri = Uri.withAppendedPath(
+		Uri widgetSettingsUri = Uri.withAppendedPath(
 				mAfWidgetInfo.getWidgetUri(), AfWidgets.TWIG_SETTINGS);
 		ContentValues[] values = buildContentValues(settingsMap);
-		resolver.bulkInsert(aixWidgetSettingsUri, values);
+		resolver.bulkInsert(widgetSettingsUri, values);
 	}
 	
 	/* END SETTINGS BACKUP/RESTORE */
@@ -885,8 +885,8 @@ public class AfSettings {
 				throw new IllegalArgumentException();	
 			}
 			
-			// int x = AixUtils.clamp(dimensions.x, 1, maxDimension);
-			// int y = AixUtils.clamp(dimensions.y, 1, maxDimension);
+			// int x = AfUtils.clamp(dimensions.x, 1, maxDimension);
+			// int y = AfUtils.clamp(dimensions.y, 1, maxDimension);
 			
 			String value = String.format(Locale.US, "%dx%d", dimensions.x, dimensions.y);
 			

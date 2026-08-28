@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
 		xmlns:android="http://schemas.android.com/apk/res/android"
-		xmlns:aix="http://schemas.android.com/apk/res-auto"
+		xmlns:app="http://schemas.android.com/apk/res-auto"
     	android:layout_width="match_parent"
     	android:layout_height="wrap_content"
     	android:orientation="vertical"
@@ -30,8 +30,8 @@
 					android:maxHeight="300dip"
 					android:paddingTop="7dip"
 					android:paddingBottom="7dip"
-					aix:mode="alpha"
-					aix:orientation="up" />
+					app:mode="alpha"
+					app:orientation="up" />
 
 			<io.github.macmacs.af.ColorView
 					android:id="@+id/svMap"
@@ -43,13 +43,13 @@
 					android:maxHeight="300dip"
 					android:paddingTop="7dip"
 					android:paddingBottom="7dip"
-					aix:mode="sv"
-					aix:borderWidth="1px"
-					aix:borderColor="#fff"
-					aix:markerSize="8dp"
-					aix:markerThickness="3dp"
-					aix:markerContourThickness="1px"
-					aix:markerContourColor="#000" />
+					app:mode="sv"
+					app:borderWidth="1px"
+					app:borderColor="#fff"
+					app:markerSize="8dp"
+					app:markerThickness="3dp"
+					app:markerContourThickness="1px"
+					app:markerContourColor="#000" />
 
 			<io.github.macmacs.af.ColorView
 					style="@style/ColorView"
@@ -61,8 +61,8 @@
 					android:maxHeight="300dip"
 					android:paddingTop="7dip"
 					android:paddingBottom="7dip"
-					aix:orientation="up"
-					aix:mode="hue" />
+					app:orientation="up"
+					app:mode="hue" />
 
 		</LinearLayout>
 
@@ -122,9 +122,9 @@
 					android:layerType="software"
 					android:maxWidth="55dip"
 					android:maxHeight="27dip"
-					aix:borderWidth="1px"
-					aix:borderColor="#fff"
-					aix:mode="color" />
+					app:borderWidth="1px"
+					app:borderColor="#fff"
+					app:mode="color" />
 
 			<io.github.macmacs.af.ColorView
 					android:id="@+id/colorNew"
@@ -134,9 +134,9 @@
 					android:layerType="software"
 					android:maxWidth="55dip"
 					android:maxHeight="27dip"
-					aix:borderWidth="1px"
-					aix:borderColor="#fff"
-					aix:mode="color" />
+					app:borderWidth="1px"
+					app:borderColor="#fff"
+					app:mode="color" />
 
 		</LinearLayout>
     </LinearLayout>

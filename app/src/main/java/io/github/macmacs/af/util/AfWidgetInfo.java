@@ -146,7 +146,7 @@ public class AfWidgetInfo {
 	{
 		if (mAfViewInfo != null)
 		{
-			mAfViewInfo.setAixLocationInfo(afLocationInfo);
+			mAfViewInfo.setLocationInfo(afLocationInfo);
 			mAfViewInfo.setType(type);
 		}
 		else

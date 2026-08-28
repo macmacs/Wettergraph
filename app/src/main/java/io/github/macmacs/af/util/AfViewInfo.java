@@ -40,8 +40,8 @@ public class AfViewInfo {
 				if (columnIndex != -1 && !cursor.isNull(columnIndex))
 				{
 					long locationId = cursor.getLong(columnIndex);
-					Uri aixLocationUri = ContentUris.withAppendedId(AfLocations.CONTENT_URI, locationId);
-					afLocationInfo = AfLocationInfo.build(context, aixLocationUri);
+					Uri locationUri = ContentUris.withAppendedId(AfLocations.CONTENT_URI, locationId);
+					afLocationInfo = AfLocationInfo.build(context, locationUri);
 				}
 				
 				int type = AfViewsColumns.TYPE_DETAILED;
@@ -126,7 +126,7 @@ public class AfViewInfo {
 		return mType;
 	}
 
-	public void setAixLocationInfo(AfLocationInfo afLocationInfo)
+	public void setLocationInfo(AfLocationInfo afLocationInfo)
 	{
 		mAfLocationInfo = afLocationInfo;
 	}

@@ -47,5 +47,5 @@ credentials, or export `WETTERGRAPH_USER_AGENT`, `WETTERGRAPH_API_KEY` and `WETT
 ## Information for use
 
 * Any use of the provided software must respect the terms of each API used.
-* [The user agent information must be changed if used in a modified application.](https://github.com/Gitsaibot/AF-Weather-Widget/blob/master/app/src/main/java/net/gitsaibot/af/AixUtils.java#L497)
-* [The GeoNames username must be changed if used in a modified application.](https://github.com/Gitsaibot/AF-Weather-Widget/blob/master/app/src/main/java/net/gitsaibot/af/data/AixGeoNamesData.java#L62)
+* [The user agent information must be changed if used in a modified application.](app/src/main/java/io/github/macmacs/af/AfUtils.java#L545)
+* [The GeoNames username must be changed if used in a modified application.](app/src/main/java/io/github/macmacs/af/data/AfGeoNamesData.java#L63)
