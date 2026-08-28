@@ -17,7 +17,7 @@
     	<activity android:name=".AfPreferenceActivity"
     	    	android:label="@string/title_configure"
     			android:windowSoftInputMode="stateHidden|adjustPan"
-    			android:taskAffinity="net.gitsaibot.af.configure"
+    			android:taskAffinity="io.github.macmacs.af.configure"
         		android:excludeFromRecents="true"
 				android:exported="false">
 
@@ -27,21 +27,21 @@
 
         </activity>
         
-        <activity android:name="net.gitsaibot.af.AfDeviceProfileActivity"
+        <activity android:name="io.github.macmacs.af.AfDeviceProfileActivity"
 		    	android:label="@string/device_profiles_title"
-		    	android:taskAffinity="net.gitsaibot.af.configure"
+		    	android:taskAffinity="io.github.macmacs.af.configure"
 		    	android:windowSoftInputMode="stateHidden|adjustPan"
 		    	android:excludeFromRecents="true" />
         
-        <activity android:name="net.gitsaibot.af.location.AfLocationSelectionActivity"
+        <activity android:name="io.github.macmacs.af.location.AfLocationSelectionActivity"
         		android:label="@string/location_settings_title"
-        		android:taskAffinity="net.gitsaibot.af.configure"
+        		android:taskAffinity="io.github.macmacs.af.configure"
         		android:windowSoftInputMode="stateHidden|adjustPan"
         		android:excludeFromRecents="true" />
         
-        <activity android:name="net.gitsaibot.af.AfIntro"
+        <activity android:name="io.github.macmacs.af.AfIntro"
         		android:label="Wettergraph"
-        		android:taskAffinity="net.gitsaibot.af.intro"
+        		android:taskAffinity="io.github.macmacs.af.intro"
         		android:excludeFromRecents="true"
 				android:exported="true">
             
@@ -53,9 +53,9 @@
 		
 		</activity>
         
-        <provider android:name="net.gitsaibot.af.AfProvider" android:authorities="${applicationId}" android:exported="true" />
+        <provider android:name="io.github.macmacs.af.AfProvider" android:authorities="${applicationId}" android:exported="true" />
         
-    	<receiver android:name="net.gitsaibot.af.AfWidget" android:label="@string/widget_name"
+    	<receiver android:name="io.github.macmacs.af.AfWidget" android:label="@string/widget_name"
 			android:exported="false">
 			<intent-filter>
 				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -64,28 +64,28 @@
     				android:resource="@xml/af_widget_provider" />
     	</receiver>
     	
-    	<receiver android:name="net.gitsaibot.af.AfServiceReceiver" android:enabled="true"
+    	<receiver android:name="io.github.macmacs.af.AfServiceReceiver" android:enabled="true"
 			android:exported="true">
 			<intent-filter>
 				<action android:name="android.intent.action.BOOT_COMPLETED" />
-				<action android:name="net.gitsaibot.af.DELETE_WIDGET" />
-				<action android:name="net.gitsaibot.af.UPDATE_ALL" />
-				<action android:name="net.gitsaibot.af.UPDATE_WIDGET_MINIMAL_DIMENSIONS" />
-				<action android:name="net.gitsaibot.af.UPDATE_WIDGET_PROVIDER_AUTO" />
-				<action android:name="net.gitsaibot.af.UPDATE_WIDGET_PROVIDER_CHANGE" />
-				<action android:name="net.gitsaibot.af.UPDATE_WIDGET" />
-				<action android:name="net.gitsaibot.af.DECREASE_LANDSCAPE_HEIGHT" />
-				<action android:name="net.gitsaibot.af.DECREASE_LANDSCAPE_WIDTH" />
-				<action android:name="net.gitsaibot.af.DECREASE_PORTRAIT_HEIGHT" />
-				<action android:name="net.gitsaibot.af.DECREASE_PORTRAIT_WIDTH" />
-				<action android:name="net.gitsaibot.af.INCREASE_LANDSCAPE_HEIGHT" />
-				<action android:name="net.gitsaibot.af.INCREASE_LANDSCAPE_WIDTH" />
-				<action android:name="net.gitsaibot.af.INCREASE_PORTRAIT_HEIGHT" />
-				<action android:name="net.gitsaibot.af.INCREASE_PORTRAIT_WIDTH" />
-				<action android:name="net.gitsaibot.af.ACCEPT_PORTRAIT_HORIZONTAL_CALIBRATION" />
-				<action android:name="net.gitsaibot.af.ACCEPT_PORTRAIT_VERTICAL_CALIBRATION" />
-				<action android:name="net.gitsaibot.af.ACCEPT_LANDSCAPE_HORIZONTAL_CALIBRATION" />
-				<action android:name="net.gitsaibot.af.ACCEPT_LANDSCAPE_VERTICAL_CALIBRATION" />
+				<action android:name="io.github.macmacs.af.DELETE_WIDGET" />
+				<action android:name="io.github.macmacs.af.UPDATE_ALL" />
+				<action android:name="io.github.macmacs.af.UPDATE_WIDGET_MINIMAL_DIMENSIONS" />
+				<action android:name="io.github.macmacs.af.UPDATE_WIDGET_PROVIDER_AUTO" />
+				<action android:name="io.github.macmacs.af.UPDATE_WIDGET_PROVIDER_CHANGE" />
+				<action android:name="io.github.macmacs.af.UPDATE_WIDGET" />
+				<action android:name="io.github.macmacs.af.DECREASE_LANDSCAPE_HEIGHT" />
+				<action android:name="io.github.macmacs.af.DECREASE_LANDSCAPE_WIDTH" />
+				<action android:name="io.github.macmacs.af.DECREASE_PORTRAIT_HEIGHT" />
+				<action android:name="io.github.macmacs.af.DECREASE_PORTRAIT_WIDTH" />
+				<action android:name="io.github.macmacs.af.INCREASE_LANDSCAPE_HEIGHT" />
+				<action android:name="io.github.macmacs.af.INCREASE_LANDSCAPE_WIDTH" />
+				<action android:name="io.github.macmacs.af.INCREASE_PORTRAIT_HEIGHT" />
+				<action android:name="io.github.macmacs.af.INCREASE_PORTRAIT_WIDTH" />
+				<action android:name="io.github.macmacs.af.ACCEPT_PORTRAIT_HORIZONTAL_CALIBRATION" />
+				<action android:name="io.github.macmacs.af.ACCEPT_PORTRAIT_VERTICAL_CALIBRATION" />
+				<action android:name="io.github.macmacs.af.ACCEPT_LANDSCAPE_HORIZONTAL_CALIBRATION" />
+				<action android:name="io.github.macmacs.af.ACCEPT_LANDSCAPE_VERTICAL_CALIBRATION" />
     		</intent-filter>
     	</receiver>
 

@@ -8,7 +8,7 @@
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/fragment_preference_activity"
-        android:name="net.gitsaibot.af.AfPreferenceFragment"
+        android:name="io.github.macmacs.af.AfPreferenceFragment"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"/>
 

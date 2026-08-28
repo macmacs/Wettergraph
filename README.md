@@ -2,7 +2,35 @@
 
 #### Free, no ads and open source!
 
+[<img src="fastlane/metadata/en_fdroid.png" height="60" alt="Get it on F-Droid">](https://macmacs.github.io/Wettergraph/)
 This app is a fork of aix weather widget which is no longer actively developed. It is a compact graphical weather graph as a single row Android widget. The source code is made public domain as it may provide utility for others. Please respect the various APIs used by the app, and please modify the user agent if you are running a modified version of the app.
+
+## F-Droid repository
+
+Signed release builds are published to a self-hosted F-Droid repository on GitHub Pages:
+
+* Landing page: <https://macmacs.github.io/Wettergraph/>
+* Repo URL: `https://macmacs.github.io/Wettergraph/fdroid/repo`
+* Signing fingerprint (SHA-256): `ACABB6F7BF481DB77CE009F761BD94C40E96FEB0DBFF28FFDF8747E6C1AF586B`
+
+Pushing a `v*` tag runs `.github/workflows/fdroid.yml`, which builds a signed release
+APK, regenerates the index with `fdroidserver` and pushes the result to the `gh-pages`
+branch. The repository configuration lives in `fdroid/`.
+
+The workflow needs these repository secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `KEYSTORE_BASE64` | base64 of the release keystore (aliases `apk` and `repo`) |
+| `KEYSTORE_PASSWORD` | keystore and key password |
+| `WETTERGRAPH_USER_AGENT` | met.no user agent |
+| `WETTERGRAPH_API_KEY` | met.no API key |
+| `WETTERGRAPH_USER_GEONAMES` | GeoNames username |
+
+## Building locally
+
+Copy `key.properties.example` to `key.properties` and fill in your own API
+credentials, or export `WETTERGRAPH_USER_AGENT`, `WETTERGRAPH_API_KEY` and `WETTERGRAPH_USER_GEONAMES`.
 
 ## Acknowledgements
 

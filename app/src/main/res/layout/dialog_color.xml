@@ -20,7 +20,7 @@
 				android:layout_marginBottom="-6dip"
 				android:orientation="horizontal">
 
-			<net.gitsaibot.af.ColorView
+			<io.github.macmacs.af.ColorView
 					android:id="@+id/alphaSlider"
 					style="@style/ColorView"
 					android:layout_width="30dip"
@@ -33,7 +33,7 @@
 					aix:mode="alpha"
 					aix:orientation="up" />
 
-			<net.gitsaibot.af.ColorView
+			<io.github.macmacs.af.ColorView
 					android:id="@+id/svMap"
 					android:layout_width="0dp"
 					android:layout_height="wrap_content"
@@ -51,7 +51,7 @@
 					aix:markerContourThickness="1px"
 					aix:markerContourColor="#000" />
 
-			<net.gitsaibot.af.ColorView
+			<io.github.macmacs.af.ColorView
 					style="@style/ColorView"
 					android:id="@+id/hueSlider"
 					android:layout_width="30dip"
@@ -113,7 +113,7 @@
 				android:orientation="horizontal"
 				android:gravity="center_horizontal">
 
-			<net.gitsaibot.af.ColorView
+			<io.github.macmacs.af.ColorView
 					android:id="@+id/colorOld"
 					android:layout_width="wrap_content"
 					android:layout_height="wrap_content"
@@ -126,7 +126,7 @@
 					aix:borderColor="#fff"
 					aix:mode="color" />
 
-			<net.gitsaibot.af.ColorView
+			<io.github.macmacs.af.ColorView
 					android:id="@+id/colorNew"
 					android:layout_width="wrap_content"
 					android:layout_height="wrap_content"

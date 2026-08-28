@@ -9,7 +9,7 @@
         android:icon="@drawable/ic_outline_straighten"
         android:layout="@layout/preference_title"
         app:allowDividerBelow="false"
-        android:fragment="net.gitsaibot.af.AfUnitPreferenceFragment"/>
+        android:fragment="io.github.macmacs.af.AfUnitPreferenceFragment"/>
 
     <Preference
         android:key="ui_preference"
@@ -17,7 +17,7 @@
         android:title="@string/ui_settings_title"
         android:icon="@drawable/ic_outline_imagesearch_roller"
         android:layout="@layout/preference_title"
-        android:fragment="net.gitsaibot.af.AfUiPreferenceFragment"/>
+        android:fragment="io.github.macmacs.af.AfUiPreferenceFragment"/>
 
     <Preference
         android:key="update_preference"
@@ -26,7 +26,7 @@
         android:icon="@drawable/ic_outline_update"
         app:allowDividerBelow="false"
         android:layout="@layout/preference_title"
-        android:fragment="net.gitsaibot.af.AfUpdatePreferenceFragment"/>
+        android:fragment="io.github.macmacs.af.AfUpdatePreferenceFragment"/>
 
     <Preference
         android:key="device_profile_preference"

@@ -1,0 +1,12 @@
+##Please respect the various APIs used by the app.
+# The user_agent, apiKey and user_geonames information must be changed if used in a modified application!!!
+#
+# Copy this file to key.properties and fill in your own values.
+# CI reads the same values from the AF_USER_AGENT / AF_API_KEY / AF_USER_GEONAMES
+# environment variables instead, supplied from GitHub secrets.
+
+#API Met.no
+user_agent=
+apiKey=
+#Geonames
+user_geonames=

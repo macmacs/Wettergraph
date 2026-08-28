@@ -30,6 +30,10 @@ jobs:
       - name: Validate Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v4
       - name: Build with Gradle
+        env:
+          WETTERGRAPH_USER_AGENT: ${{ secrets.WETTERGRAPH_USER_AGENT }}
+          WETTERGRAPH_API_KEY: ${{ secrets.WETTERGRAPH_API_KEY }}
+          WETTERGRAPH_USER_GEONAMES: ${{ secrets.WETTERGRAPH_USER_GEONAMES }}
         run: ./gradlew build
       - name: Upload APK
         uses: actions/upload-artifact@v4

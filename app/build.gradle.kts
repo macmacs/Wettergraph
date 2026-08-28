@@ -1,36 +1,49 @@
 import java.io.FileInputStream
-import java.io.FileNotFoundException
 import java.util.Properties
 
 plugins {
     id("com.android.application")
 }
 
-fun getKey(key: String): String {
+fun getKey(key: String, env: String): String {
     val fl = rootProject.file("key.properties")
     if (fl.exists()) {
         val properties = Properties()
         properties.load(FileInputStream(fl))
-        return properties.getProperty(key)
-    } else {
-        throw FileNotFoundException()
+        val value = properties.getProperty(key)
+        if (value != null) return value
     }
+    return System.getenv(env)
+        ?: throw GradleException("Missing '$key' in key.properties and no $env environment variable set.")
 }
 
 android {
-    namespace = "net.gitsaibot.af"
+    namespace = "io.github.macmacs.af"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "net.gitsaibot.af"
+        applicationId = "io.github.macmacs.af"
         minSdk = 29
         targetSdk = 36
         versionCode = 40
         versionName = "4.0"
-        buildConfigField("String", "USER_AGENT", "\"" + getKey("user_agent") + "\"")
-        buildConfigField("String", "API_KEY", "\"" + getKey("apiKey") + "\"")
-        buildConfigField("String", "USER_GEONAMES", "\"" + getKey("user_geonames") + "\"")
+        buildConfigField("String", "USER_AGENT", "\"" + getKey("user_agent", "WETTERGRAPH_USER_AGENT") + "\"")
+        buildConfigField("String", "API_KEY", "\"" + getKey("apiKey", "WETTERGRAPH_API_KEY") + "\"")
+        buildConfigField("String", "USER_GEONAMES", "\"" + getKey("user_geonames", "WETTERGRAPH_USER_GEONAMES") + "\"")
         multiDexEnabled = true
+    }
+
+    val keystorePath: String? = System.getenv("KEYSTORE_PATH")
+
+    signingConfigs {
+        if (keystorePath != null) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS") ?: "apk"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -40,6 +53,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.txt"
             )
+            if (keystorePath != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             isMinifyEnabled = false
