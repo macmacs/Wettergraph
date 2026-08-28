@@ -1,0 +1,135 @@
+{
+  "repo": {
+    "name": {
+      "en-US": "Wettergraph"
+    },
+    "description": {
+      "en-US": "F-Droid repository for Wettergraph, the AF Weather Widget fork maintained by macmacs. Signed release builds are published here on every tagged version."
+    },
+    "icon": {
+      "en-US": {
+        "name": "/icons/icon.png",
+        "sha256": "2c76c333d070eeb1f61237e7d3bbc29a32011d156c9114bc2ae1596ebb9ddb92",
+        "size": 3638
+      }
+    },
+    "address": "https://macmacs.github.io/Wettergraph/fdroid/repo",
+    "timestamp": 1787911814000,
+    "categories": {
+      "Time": {
+        "name": {
+          "en-US": "Time"
+        }
+      }
+    }
+  },
+  "packages": {
+    "io.github.macmacs.af": {
+      "metadata": {
+        "added": 1787911814000,
+        "categories": [
+          "Time"
+        ],
+        "issueTracker": "https://github.com/macmacs/Wettergraph/issues",
+        "lastUpdated": 1787911814000,
+        "license": "CC0-1.0",
+        "sourceCode": "https://github.com/macmacs/Wettergraph",
+        "screenshots": {
+          "phone": {
+            "en-US": [
+              {
+                "name": "/io.github.macmacs.af/en-US/phoneScreenshots/af_weather_cold.png",
+                "sha256": "e38dd4fbae851a5ee31cb592d9314721c2a870ce58df0169945e8183de5658ba",
+                "size": 302937
+              },
+              {
+                "name": "/io.github.macmacs.af/en-US/phoneScreenshots/af_weather_color_black.png",
+                "sha256": "1b9446cf6daee06c9a41d0c2029caa164c267fd797cbcfce67513dc2154cebb1",
+                "size": 138275
+              },
+              {
+                "name": "/io.github.macmacs.af/en-US/phoneScreenshots/af_weather_round_corners.png",
+                "sha256": "1e38b0518ca74f0fe720876f335912a94f388af18a57c285194de8832b0ca0cf",
+                "size": 139507
+              },
+              {
+                "name": "/io.github.macmacs.af/en-US/phoneScreenshots/af_weather_settings.png",
+                "sha256": "ef4c3297e94b2003c83be4fd75ccd01fab4e2f518f3b406957d013e59baac6b6",
+                "size": 89911
+              },
+              {
+                "name": "/io.github.macmacs.af/en-US/phoneScreenshots/af_weather_warm.png",
+                "sha256": "4d176780ee62eae2f445f3833ad942c37f19b207063a591ac524b1af3c98baba",
+                "size": 294893
+              }
+            ]
+          }
+        },
+        "authorName": "macmacs",
+        "name": {
+          "en-US": "AF Weather Widget"
+        },
+        "summary": {
+          "en-US": "Graph weather widget for Android"
+        },
+        "description": {
+          "en-US": "This app is a fork of aix weather widget which is no longer actively developed. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>"
+        },
+        "icon": {
+          "en-US": {
+            "name": "/io.github.macmacs.af/en-US/icon_LHbDM9Bw7rH2Ejfn07vCmjIBHRVskRS8KuFZbrud25I=.png",
+            "sha256": "2c76c333d070eeb1f61237e7d3bbc29a32011d156c9114bc2ae1596ebb9ddb92",
+            "size": 3638
+          }
+        },
+        "preferredSigner": "1d538b945d53b81b31357507e93412ce710342db8868da1ebf6a30b605e9c959"
+      },
+      "versions": {
+        "e9abeb8e6d0fe02610050bb73ea015ba8a5d6eedbc796790ccd4f3c9feeeb179": {
+          "added": 1787911814000,
+          "file": {
+            "name": "/io.github.macmacs.af_40.apk",
+            "sha256": "e9abeb8e6d0fe02610050bb73ea015ba8a5d6eedbc796790ccd4f3c9feeeb179",
+            "size": 14553054
+          },
+          "manifest": {
+            "versionName": "4.0",
+            "versionCode": 40,
+            "usesSdk": {
+              "minSdkVersion": 29,
+              "targetSdkVersion": 36
+            },
+            "signer": {
+              "sha256": [
+                "1d538b945d53b81b31357507e93412ce710342db8868da1ebf6a30b605e9c959"
+              ]
+            },
+            "usesPermission": [
+              {
+                "name": "android.permission.INTERNET"
+              },
+              {
+                "name": "android.permission.ACCESS_NETWORK_STATE"
+              },
+              {
+                "name": "android.permission.WAKE_LOCK"
+              },
+              {
+                "name": "android.permission.RECEIVE_BOOT_COMPLETED"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE"
+              },
+              {
+                "name": "io.github.macmacs.af.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+              }
+            ]
+          },
+          "whatsNew": {
+            "en-US": "- Added configurable graph range and wind panel with gusts and direction\n"
+          }
+        }
+      }
+    }
+  }
+}
