@@ -1,6 +1,6 @@
 {
   "repo": {
-    "timestamp": 1787911814000,
+    "timestamp": 1787915551000,
     "version": 20002,
     "name": "Wettergraph",
     "icon": "icon.png",
@@ -27,9 +27,9 @@
       "lastUpdated": 1787911814000,
       "localized": {
         "en-US": {
-          "description": "This app is a fork of aix weather widget which is no longer actively developed. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>",
+          "description": "This app is a fork of AF Weather Widget which is no longer actively developed. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>",
           "icon": "icon_LHbDM9Bw7rH2Ejfn07vCmjIBHRVskRS8KuFZbrud25I=.png",
-          "name": "AF Weather Widget",
+          "name": "Wettergraph",
           "phoneScreenshots": [
             "af_weather_cold.png",
             "af_weather_color_black.png",
@@ -48,13 +48,13 @@
       {
         "added": 1787911814000,
         "apkName": "io.github.macmacs.af_40.apk",
-        "hash": "e9abeb8e6d0fe02610050bb73ea015ba8a5d6eedbc796790ccd4f3c9feeeb179",
+        "hash": "47d8e6b339bf10805a59c48fa4c2f6b291ec3843d84c67e41318682c392200a9",
         "hashType": "sha256",
         "minSdkVersion": 29,
         "packageName": "io.github.macmacs.af",
         "sig": "09a499896ab32eb9a09ef571bea41a4c",
         "signer": "1d538b945d53b81b31357507e93412ce710342db8868da1ebf6a30b605e9c959",
-        "size": 14553054,
+        "size": 14553074,
         "targetSdkVersion": 36,
         "uses-permission": [
           [

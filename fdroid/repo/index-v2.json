@@ -14,7 +14,7 @@
       }
     },
     "address": "https://macmacs.github.io/Wettergraph/fdroid/repo",
-    "timestamp": 1787911814000,
+    "timestamp": 1787915551000,
     "categories": {
       "Time": {
         "name": {
@@ -67,13 +67,13 @@
         },
         "authorName": "macmacs",
         "name": {
-          "en-US": "AF Weather Widget"
+          "en-US": "Wettergraph"
         },
         "summary": {
           "en-US": "Graph weather widget for Android"
         },
         "description": {
-          "en-US": "This app is a fork of aix weather widget which is no longer actively developed. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>"
+          "en-US": "This app is a fork of AF Weather Widget which is no longer actively developed. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>"
         },
         "icon": {
           "en-US": {
@@ -85,12 +85,12 @@
         "preferredSigner": "1d538b945d53b81b31357507e93412ce710342db8868da1ebf6a30b605e9c959"
       },
       "versions": {
-        "e9abeb8e6d0fe02610050bb73ea015ba8a5d6eedbc796790ccd4f3c9feeeb179": {
+        "47d8e6b339bf10805a59c48fa4c2f6b291ec3843d84c67e41318682c392200a9": {
           "added": 1787911814000,
           "file": {
             "name": "/io.github.macmacs.af_40.apk",
-            "sha256": "e9abeb8e6d0fe02610050bb73ea015ba8a5d6eedbc796790ccd4f3c9feeeb179",
-            "size": 14553054
+            "sha256": "47d8e6b339bf10805a59c48fa4c2f6b291ec3843d84c67e41318682c392200a9",
+            "size": 14553074
           },
           "manifest": {
             "versionName": "4.0",
