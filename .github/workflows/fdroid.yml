@@ -61,7 +61,7 @@ jobs:
           echo no | "$AVDMGR" create avd -n wettergraph_pixel9 \
             -k "system-images;android-35;google_apis;x86_64" -d pixel_6 --force
           CFG=""
-          for base in "$ANDROID_AVD_HOME" "${ANDROID_USER_HOME:-$HOME/.android}/avd" "$HOME/.android/avd"; do
+          for base in "${ANDROID_AVD_HOME:-}" "${ANDROID_USER_HOME:-$HOME/.android}/avd" "$HOME/.android/avd"; do
             if [[ -n "$base" && -f "$base/wettergraph_pixel9.avd/config.ini" ]]; then
               CFG="$base/wettergraph_pixel9.avd/config.ini"
               break
