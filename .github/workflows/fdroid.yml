@@ -82,6 +82,11 @@ jobs:
           /tmp/shotvenv/bin/pip install Pillow
           echo "/tmp/shotvenv/bin" >> "$GITHUB_PATH"
 
+      - name: Emulator acceleration check
+        run: |
+          ls -l /dev/kvm || echo "no /dev/kvm"
+          "$ANDROID_HOME/emulator/emulator" -accel-check || true
+
       - name: Capture screenshots
         env:
           WETTERGRAPH_USER_AGENT: ${{ secrets.WETTERGRAPH_USER_AGENT }}

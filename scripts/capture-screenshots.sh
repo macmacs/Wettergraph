@@ -343,10 +343,18 @@ if [[ "$NO_BOOT" -ne 1 ]]; then
             if adb_shell getprop sys.boot_completed 2>/dev/null | grep -q "1"; then
                 break
             fi
+            if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
+                log "emulator process exited unexpectedly; last log lines:" >&2
+                tail -40 "$WORK_DIR/emulator.log" >&2 || true
+                "$ADB" devices >&2 || true
+                exit 1
+            fi
             sleep 10
         done
         if ! adb_shell getprop sys.boot_completed 2>/dev/null | grep -q "1"; then
-            log "emulator did not boot in time" >&2
+            log "emulator did not boot in time; last log lines:" >&2
+            tail -40 "$WORK_DIR/emulator.log" >&2 || true
+            "$ADB" devices >&2 || true
             exit 1
         fi
     fi
