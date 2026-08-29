@@ -4,7 +4,8 @@
 #
 # Regenerates the F-Droid screenshot set on an Android emulator, using the
 # debug-only mock data hook (AfMockData). No real device and no network data
-# source required. The same script runs locally and in GitHub Actions.
+# source required. Intended to run in GitHub Actions (screenshots job of
+# .github/workflows/fdroid.yml); local runs need KVM and are not supported.
 #
 # Usage:
 #   scripts/capture-screenshots.sh                boot the emulator, capture, write PNGs
@@ -13,7 +14,7 @@
 #   scripts/capture-screenshots.sh --keep-apk     do not rebuild the debug APK
 #
 # Requirements: Android SDK (adb, emulator), an AVD named "wettergraph_pixel9"
-# (see README), python3, ./gradlew.
+# (provisioned by the CI workflow), python3, ./gradlew.
 
 set -euo pipefail
 
