@@ -32,6 +32,39 @@ The workflow needs these repository secrets:
 Copy `key.properties.example` to `key.properties` and fill in your own API
 credentials, or export `WETTERGRAPH_USER_AGENT`, `WETTERGRAPH_API_KEY` and `WETTERGRAPH_USER_GEONAMES`.
 
+## Screenshots
+
+The F-Droid listing and the landing page screenshots are captured automatically
+from an Android emulator, no real device required. The widget renders
+synthetic, curated weather data via a debug-only mock hook, so the shots are
+deterministic and never depend on live API data.
+
+Capture runs:
+
+* In CI: the `screenshots` job of `.github/workflows/fdroid.yml` runs on every
+  `v*` tag push (and on manual dispatch). The fresh PNGs feed the published
+  F-Droid index and are committed back to `main`.
+* Locally: `scripts/capture-screenshots.sh` boots the emulator, captures the
+  five shots and writes them into
+  `fastlane/metadata/android/en-US/images/phoneScreenshots/`.
+
+One-time local setup (emulator + system image + Pixel 9 display profile,
+1080x2424 @ 420 dpi):
+
+```sh
+yes | sdkmanager --licenses
+sdkmanager "emulator" "system-images;android-35;google_apis;x86_64"
+echo no | avdmanager create avd -n wettergraph_pixel9 \
+  -k "system-images;android-35;google_apis;x86_64" -d pixel_6
+sed -i 's/^hw.lcd.width.*/hw.lcd.width = 1080/; s/^hw.lcd.height.*/hw.lcd.height = 2424/; s/^hw.lcd.density.*/hw.lcd.density = 420/' \
+  ~/.android/avd/wettergraph_pixel9.avd/config.ini
+```
+
+The emulator needs hardware acceleration (KVM). The mock hook lives in
+`AfMockData.java` and only activates in debug builds when the
+`global_mock_weather` SharedPreferences key is set; release builds are
+unaffected.
+
 ## Acknowledgements
 
 * The Norwegian Meteorological Institute for providing an [open weather data API](https://api.met.no/#english).
