@@ -337,7 +337,7 @@ if [[ "$NO_BOOT" -ne 1 ]]; then
         EMULATOR_PID=$!
         trap 'kill $EMULATOR_PID 2>/dev/null; rm -rf "$WORK_DIR"' EXIT
 
-        local deadline=$((SECONDS + 1800))
+        deadline=$((SECONDS + 1800))
         while (( SECONDS < deadline )); do
             if adb_shell getprop sys.boot_completed 2>/dev/null | grep -q "1"; then
                 break
