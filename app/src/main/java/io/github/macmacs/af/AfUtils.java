@@ -27,6 +27,7 @@ import io.github.macmacs.af.AfProvider.AfSunMoonData;
 import io.github.macmacs.af.AfProvider.AfViews;
 import io.github.macmacs.af.AfProvider.AfWidgets;
 import io.github.macmacs.af.AfProvider.AfWidgetsColumns;
+import io.github.macmacs.af.data.AfMockData;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
@@ -601,6 +602,10 @@ public class AfUtils {
 	}
 
 	public static HttpURLConnection setupHttpClient(URL url, Context context) throws IOException {
+
+		if (BuildConfig.DEBUG && AfMockData.isEnabled(context)) {
+			return AfMockData.createConnection(url, context);
+		}
 
 		HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
 		urlConnection.setRequestProperty("User-Agent", AfUtils.getUserAgent(context));

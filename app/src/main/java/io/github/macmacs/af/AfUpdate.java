@@ -24,6 +24,7 @@ import io.github.macmacs.af.data.AfDataUpdateException;
 import io.github.macmacs.af.data.AfGeoNamesData;
 import io.github.macmacs.af.data.AfMetSunTimeData;
 import io.github.macmacs.af.data.AfMetWeatherData;
+import io.github.macmacs.af.data.AfMockData;
 import io.github.macmacs.af.data.AfNoaaWeatherData;
 import io.github.macmacs.af.util.AfLocationInfo;
 import io.github.macmacs.af.util.AfViewInfo;
@@ -313,6 +314,10 @@ public class AfUpdate {
         }
 
         mAfSettings.setWidgetState(WIDGET_STATE_RENDER);
+
+        if (BuildConfig.DEBUG && AfMockData.isEnabled(mContext)) {
+            updateView.setContentDescription(R.id.widgetContainer, "wettergraph_widget");
+        }
 
         PendingIntent configurationIntent = AfUtils.buildConfigurationIntent(mContext, mAfWidgetInfo.getWidgetUri());
         updateView.setOnClickPendingIntent(R.id.widgetContainer, configurationIntent);

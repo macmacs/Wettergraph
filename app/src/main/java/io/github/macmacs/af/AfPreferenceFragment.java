@@ -3,11 +3,14 @@ package io.github.macmacs.af;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
+import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.BaseColumns;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -23,6 +26,7 @@ import androidx.annotation.NonNull;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
+import io.github.macmacs.af.data.AfMockData;
 import io.github.macmacs.af.location.AfLocationSelectionActivity;
 import io.github.macmacs.af.util.AfLocationInfo;
 import io.github.macmacs.af.util.AfWidgetInfo;
@@ -173,6 +177,35 @@ public class AfPreferenceFragment extends PreferenceFragmentCompat implements
             mAfSettings.initializePreferencesExistingWidget();
         } else {
             mAfSettings.initializePreferencesNewWidget();
+        }
+
+        if (!mActionEdit && BuildConfig.DEBUG && AfMockData.isEnabled(getActivity().getApplicationContext())) {
+            configureMockLocation();
+        }
+    }
+
+    private void configureMockLocation() {
+        try {
+            ContentResolver resolver = getActivity().getApplicationContext().getContentResolver();
+            Cursor cursor = resolver.query(AfProvider.AfLocations.CONTENT_URI, null, null, null, null);
+
+            if (cursor != null) {
+                try {
+                    if (cursor.moveToFirst()) {
+                        Uri locationUri = ContentUris.withAppendedId(
+                                AfProvider.AfLocations.CONTENT_URI,
+                                cursor.getLong(cursor.getColumnIndexOrThrow(BaseColumns._ID)));
+                        AfLocationInfo afLocationInfo = AfLocationInfo.build(
+                                getActivity().getApplicationContext(), locationUri);
+                        mAfWidgetInfo.setViewInfo(afLocationInfo, AfProvider.AfViews.TYPE_DETAILED);
+                        Log.d(TAG, "Mock mode: attached default location " + afLocationInfo);
+                    }
+                } finally {
+                    cursor.close();
+                }
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "Mock mode: failed to attach default location.", e);
         }
     }
 
