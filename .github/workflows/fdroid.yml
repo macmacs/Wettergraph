@@ -59,8 +59,21 @@ jobs:
           yes | "$SDKMGR" --licenses > /dev/null
           "$SDKMGR" "emulator" "system-images;android-35;google_apis;x86_64" > /dev/null
           echo no | "$AVDMGR" create avd -n wettergraph_pixel9 \
-            -k "system-images;android-35;google_apis;x86_64" -d pixel_6 --force > /dev/null
-          CFG="$HOME/.android/avd/wettergraph_pixel9.avd/config.ini"
+            -k "system-images;android-35;google_apis;x86_64" -d pixel_6 --force
+          CFG=""
+          for base in "$ANDROID_AVD_HOME" "${ANDROID_USER_HOME:-$HOME/.android}/avd" "$HOME/.android/avd"; do
+            if [[ -n "$base" && -f "$base/wettergraph_pixel9.avd/config.ini" ]]; then
+              CFG="$base/wettergraph_pixel9.avd/config.ini"
+              break
+            fi
+          done
+          [[ -n "$CFG" ]] || {
+            echo "AVD config.ini not found:"
+            find / -name config.ini -path "*wettergraph*" 2>/dev/null || true
+            ls -la "$HOME/.android" 2>/dev/null || true
+            exit 1
+          }
+          echo "Patching AVD config: $CFG"
           sed -i 's/^hw.lcd.width.*/hw.lcd.width = 1080/; s/^hw.lcd.height.*/hw.lcd.height = 2424/; s/^hw.lcd.density.*/hw.lcd.density = 420/; s/^hw.ramSize.*/hw.ramSize = 2048/' "$CFG"
 
       - name: Install Pillow
