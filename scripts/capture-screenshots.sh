@@ -24,6 +24,9 @@ ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 
 AVD_NAME="${AVD_NAME:-wettergraph_pixel9}"
 PACKAGE="io.github.macmacs.af.debug"
+# Java namespace; component classes live here even though the debug
+# applicationId carries the .debug suffix.
+NS_PACKAGE="io.github.macmacs.af"
 PREFS_FILE="${PACKAGE}_preferences.xml"
 PREFS_DIR="/data/data/${PACKAGE}/shared_prefs"
 FREEZE_TIME_MS="${FREEZE_TIME_MS:-1768464000000}" # 2026-01-15 09:00:00 CET
@@ -264,7 +267,7 @@ write_prefs() {
 }
 
 pin_widget() {
-    adb_shell am start -n "$PACKAGE/.AfWidgetPinActivity" >/dev/null 2>&1 || true
+    adb_shell am start -n "$PACKAGE/$NS_PACKAGE.AfWidgetPinActivity" >/dev/null 2>&1 || true
 
     # The launcher may show an "Add to home screen" confirmation dialog,
     # or add the widget directly and open the configuration screen.
@@ -483,7 +486,7 @@ freeze_clock
 # Fresh appWidgetId forces the new-widget config path; the mock hook attaches
 # the default location so the screen is fully populated.
 adb_shell am start -a android.appwidget.action.APPWIDGET_CONFIGURE \
-    -n "$PACKAGE/.AfPreferenceActivity" --ei appWidgetId 424242 >/dev/null 2>&1 || true
+    -n "$PACKAGE/$NS_PACKAGE.AfPreferenceActivity" --ei appWidgetId 424242 >/dev/null 2>&1 || true
 
 wait_for_text "Add Widget" 120 >/dev/null || log "config screen did not appear for settings shot"
 sleep 8
