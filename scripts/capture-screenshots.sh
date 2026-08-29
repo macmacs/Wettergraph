@@ -217,6 +217,24 @@ for n in tree.getroot().iter("node"):
     if t or d:
         print(f"  text={t!r} desc={d!r}")
 PYEOF
+    if [[ -f "$WORK_DIR/pin_ui_last.xml" ]]; then
+        log "last UI seen during pin loop:" >&2
+        python3 - "$WORK_DIR/pin_ui_last.xml" >&2 <<'PYEOF'
+import sys
+import xml.etree.ElementTree as ET
+tree = ET.parse(sys.argv[1])
+for n in tree.getroot().iter("node"):
+    t = n.attrib.get("text", "")
+    d = n.attrib.get("content-desc", "")
+    if t or d:
+        print(f"  text={t!r} desc={d!r}")
+PYEOF
+    fi
+    log "dumpsys appwidget:" >&2
+    "$ADB" shell dumpsys appwidget 2>/dev/null | head -60 >&2 || true
+    log "pin-related logcat:" >&2
+    grep -iE 'AddItem|PinItem|requestPin|AppWidget|Launcher' "$WORK_DIR/logcat_after_pin.txt" 2>/dev/null \
+        | tail -40 >&2 || true
     log "recent logcat:" >&2
     adb_shell logcat -d -t 300 2>/dev/null \
         | grep -iE 'AfWidget|AppWidget|AndroidRuntime|FATAL|wettergraph|macmacs' \
@@ -276,6 +294,7 @@ pin_widget() {
     while (( SECONDS < deadline )); do
         ui="$(wait_for_ui 5)"
         [[ -z "$ui" ]] && { sleep 2; continue; }
+        cp "$ui" "$WORK_DIR/pin_ui_last.xml" 2>/dev/null || true
         bounds="$(python_parse "$ui" contains "Add to" "text" 2>/dev/null)" && {
             tap_bounds "$bounds"
             break
@@ -288,6 +307,7 @@ pin_widget() {
         fi
         sleep 2
     done
+    adb_shell logcat -d > "$WORK_DIR/logcat_after_pin.txt" 2>/dev/null || true
 }
 
 # Id of the most recently bound widget of this app, from the system service.
