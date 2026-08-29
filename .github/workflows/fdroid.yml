@@ -85,9 +85,11 @@ jobs:
           /tmp/shotvenv/bin/pip install Pillow
           echo "/tmp/shotvenv/bin" >> "$GITHUB_PATH"
 
-      - name: Emulator acceleration check
+      - name: Enable KVM for runner user
         run: |
-          ls -l /dev/kvm || echo "no /dev/kvm"
+          ls -l /dev/kvm
+          sudo chmod 666 /dev/kvm || true
+          ls -l /dev/kvm
           "$ANDROID_HOME/emulator/emulator" -accel-check || true
 
       - name: Capture screenshots
