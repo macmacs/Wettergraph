@@ -149,6 +149,11 @@ center_of_bounds() {
     python_parse /dev/null center "$1" 2>/dev/null
 }
 
+# "[x1,y1][x2,y2]" -> "x1 y1 x2 y2"
+parse_bounds() {
+    echo "$1" | sed 's/\]\[/ /; s/[][]//g; s/,/ /g'
+}
+
 tap_bounds() {
     local bounds="$1"
     local center
@@ -234,16 +239,20 @@ write_prefs() {
 pin_widget() {
     adb_shell am start -n "$PACKAGE/.AfWidgetPinActivity" >/dev/null 2>&1 || true
 
-    # The launcher may show an "Add to home screen" confirmation dialog.
-    local deadline=$((SECONDS + 30))
+    # The launcher may show an "Add to home screen" confirmation dialog,
+    # or add the widget directly and open the configuration screen.
+    local deadline=$((SECONDS + 40))
     local ui bounds
     while (( SECONDS < deadline )); do
         ui="$(wait_for_ui 5)"
         [[ -z "$ui" ]] && { sleep 2; continue; }
-        bounds="$(python_parse "$ui" contains "Add" "text" 2>/dev/null)" && {
+        bounds="$(python_parse "$ui" contains "Add to" "text" 2>/dev/null)" && {
             tap_bounds "$bounds"
             break
         }
+        if python_parse "$ui" text "Add Widget" >/dev/null 2>&1; then
+            break
+        fi
         sleep 2
     done
 }
@@ -257,8 +266,7 @@ resize_widget() {
     center="$(center_of_bounds "$bounds")"
     x="${center% *}"; y="${center#* }"
 
-    x1="${bounds%]*}"; x1="${x1#[}"; x1="${x1%%,*}"
-    x2="${bounds##*[}"; x2="${x2%%]*}"; x2="${x2##*,}"
+    read -r x1 y1 x2 y2 <<< "$(parse_bounds "$bounds")"
     cur_w=$((x2 - x1))
 
     if (( cur_w >= target_width - 40 )); then
@@ -399,9 +407,8 @@ capture_widget_shot() {
 
     if [[ "$wide" -eq 1 ]]; then
         # Compute 5-cell width from the current bounds: pinned is 4 cells.
-        local x1 x2 cur_w cell target
-        x1="${widget_bounds%]*}"; x1="${x1#[}"; x1="${x1%%,*}"
-        x2="${widget_bounds##*[}"; x2="${x2%%]*}"; x2="${x2##*,}"
+        local p x1 y1 x2 y2 cur_w cell target
+        read -r x1 y1 x2 y2 <<< "$(parse_bounds "$widget_bounds")"
         cur_w=$((x2 - x1))
         cell=$((cur_w / 4))
         target=$((cur_w + cell))
