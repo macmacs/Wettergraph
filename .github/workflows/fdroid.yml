@@ -75,6 +75,9 @@ jobs:
           }
           echo "Patching AVD config: $CFG"
           sed -i 's/^hw.lcd.width.*/hw.lcd.width = 1080/; s/^hw.lcd.height.*/hw.lcd.height = 2424/; s/^hw.lcd.density.*/hw.lcd.density = 420/; s/^hw.ramSize.*/hw.ramSize = 2048/' "$CFG"
+          AVD_DIR="$(dirname "$(dirname "$CFG")")"
+          echo "AVD dir: $AVD_DIR"
+          echo "ANDROID_AVD_HOME=$AVD_DIR" >> "$GITHUB_ENV"
 
       - name: Install Pillow
         run: |
