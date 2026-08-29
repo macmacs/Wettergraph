@@ -270,8 +270,8 @@ pin_widget() {
     adb_shell am start -n "$PACKAGE/$NS_PACKAGE.AfWidgetPinActivity" >/dev/null 2>&1 || true
 
     # The launcher may show an "Add to home screen" confirmation dialog,
-    # or add the widget directly and open the configuration screen.
-    local deadline=$((SECONDS + 40))
+    # add the widget silently, or add it and open the configuration screen.
+    local deadline=$((SECONDS + 60))
     local ui bounds
     while (( SECONDS < deadline )); do
         ui="$(wait_for_ui 5)"
@@ -283,8 +283,31 @@ pin_widget() {
         if python_parse "$ui" text "Add Widget" >/dev/null 2>&1; then
             break
         fi
+        if python_parse "$ui" desc "$WIDGET_MARKER" >/dev/null 2>&1; then
+            break
+        fi
         sleep 2
     done
+}
+
+# Id of the most recently bound widget of this app, from the system service.
+latest_appwidget_id() {
+    "$ADB" shell dumpsys appwidget 2>/dev/null \
+        | sed -n '/Provider io.github.macmacs.af.debug\/io.github.macmacs.af.AfWidget:/,/^  Provider/p' \
+        | grep -oE 'widgetId=[0-9]+' | tail -1 | cut -d= -f2
+}
+
+# Wait until the launcher has bound a widget for this app.
+poll_appwidget_id() {
+    local timeout="${1:-180}"
+    local deadline=$((SECONDS + timeout))
+    local id=""
+    while (( SECONDS < deadline )); do
+        id="$(latest_appwidget_id)"
+        [[ -n "$id" ]] && { echo "$id"; return 0; }
+        sleep 5
+    done
+    return 1
 }
 
 # Long-press the widget, drag its right resize handle to the target width.
@@ -429,6 +452,22 @@ capture_widget_shot() {
     sleep 2
 
     pin_widget
+
+    # If the launcher did not open the configuration screen itself, open it
+    # with the real widget id; the preference fragment commits the widget row
+    # and attaches the mock location as soon as it opens.
+    if ! wait_for_text "Add Widget" 10 >/dev/null; then
+        local widget_id
+        widget_id="$(poll_appwidget_id 180)" || {
+            log "no bound widget found for $name" >&2
+            dump_ui_debug
+            return 1
+        }
+        log "opening config screen for widget id $widget_id"
+        adb_shell am start -a android.appwidget.action.APPWIDGET_CONFIGURE \
+            -n "$PACKAGE/$NS_PACKAGE.AfPreferenceActivity" \
+            --ei appWidgetId "$widget_id" >/dev/null 2>&1 || true
+    fi
 
     local add_bounds
     add_bounds="$(wait_for_text "Add Widget" 120)" || {
