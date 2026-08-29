@@ -513,6 +513,7 @@ capture_widget_shot() {
     local widget_bounds
     widget_bounds="$(wait_for_desc "$WIDGET_MARKER" 240)" || {
         log "widget did not render for $name" >&2
+        dump_ui_debug
         return 1
     }
     sleep 5
