@@ -214,6 +214,10 @@ for n in tree.getroot().iter("node"):
     if t or d:
         print(f"  text={t!r} desc={d!r}")
 PYEOF
+    log "recent logcat:" >&2
+    adb_shell logcat -d -t 300 2>/dev/null \
+        | grep -iE 'AfWidget|AppWidget|AndroidRuntime|FATAL|wettergraph|macmacs' \
+        | tail -40 >&2 || true
 }
 
 write_prefs() {
