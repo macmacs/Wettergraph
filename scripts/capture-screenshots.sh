@@ -113,6 +113,17 @@ elif mode == "contains":
             print(n.attrib.get("bounds", ""))
             sys.exit(0)
     sys.exit(1)
+elif mode == "last_contains":
+    want = sys.argv[3]
+    attr = sys.argv[4]
+    found = None
+    for n in nodes:
+        if want in n.attrib.get(attr, ""):
+            found = n.attrib.get("bounds", "")
+    if found is None:
+        sys.exit(1)
+    print(found)
+    sys.exit(0)
 else:
     sys.exit(1)
 PYEOF
@@ -295,7 +306,7 @@ pin_widget() {
         ui="$(wait_for_ui 5)"
         [[ -z "$ui" ]] && { sleep 2; continue; }
         cp "$ui" "$WORK_DIR/pin_ui_last.xml" 2>/dev/null || true
-        bounds="$(python_parse "$ui" contains "Add to" "text" 2>/dev/null)" && {
+        bounds="$(python_parse "$ui" last_contains "Add to" "text" 2>/dev/null)" && {
             tap_bounds "$bounds"
             break
         }
@@ -310,11 +321,12 @@ pin_widget() {
     adb_shell logcat -d > "$WORK_DIR/logcat_after_pin.txt" 2>/dev/null || true
 }
 
-# Id of the most recently bound widget of this app, from the system service.
+# Id of the most recently bound widget of this app, from the launcher's
+# own log line ("App widget created with id: N").
 latest_appwidget_id() {
-    "$ADB" shell dumpsys appwidget 2>/dev/null \
-        | sed -n '/Provider io.github.macmacs.af.debug\/io.github.macmacs.af.AfWidget:/,/^  Provider/p' \
-        | grep -oE 'widgetId=[0-9]+' | tail -1 | cut -d= -f2
+    adb_shell logcat -d 2>/dev/null \
+        | grep -oE 'App widget created with id: [0-9]+' \
+        | tail -1 | grep -oE '[0-9]+$'
 }
 
 # Wait until the launcher has bound a widget for this app.
