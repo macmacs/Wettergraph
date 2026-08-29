@@ -20,12 +20,92 @@ env:
   KEYSTORE_PATH: ${{ github.workspace }}/.release.jks
 
 jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'corretto'
+          java-version: '21'
+
+      - name: Restore Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Set up Android SDK and AVD
+        run: |
+          set -eu
+          SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          AVDMGR="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          [[ -x "$SDKMGR" ]] || SDKMGR="$(command -v sdkmanager)"
+          [[ -x "$AVDMGR" ]] || AVDMGR="$(command -v avdmanager)"
+          yes | "$SDKMGR" --licenses > /dev/null
+          "$SDKMGR" "emulator" "system-images;android-35;google_apis;x86_64" > /dev/null
+          echo no | "$AVDMGR" create avd -n wettergraph_pixel9 \
+            -k "system-images;android-35;google_apis;x86_64" -d pixel_6 --force > /dev/null
+          CFG="$HOME/.android/avd/wettergraph_pixel9.avd/config.ini"
+          sed -i 's/^hw.lcd.width.*/hw.lcd.width = 1080/; s/^hw.lcd.height.*/hw.lcd.height = 2424/; s/^hw.lcd.density.*/hw.lcd.density = 420/; s/^hw.ramSize.*/hw.ramSize = 2048/' "$CFG"
+
+      - name: Install Pillow
+        run: |
+          python3 -m venv /tmp/shotvenv
+          /tmp/shotvenv/bin/pip install Pillow
+          echo "/tmp/shotvenv/bin" >> "$GITHUB_PATH"
+
+      - name: Capture screenshots
+        env:
+          WETTERGRAPH_USER_AGENT: ${{ secrets.WETTERGRAPH_USER_AGENT }}
+          WETTERGRAPH_API_KEY: ${{ secrets.WETTERGRAPH_API_KEY }}
+          WETTERGRAPH_USER_GEONAMES: ${{ secrets.WETTERGRAPH_USER_GEONAMES }}
+        run: scripts/capture-screenshots.sh
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: fastlane/metadata/android/en-US/images/phoneScreenshots/*.png
+          if-no-files-found: error
+
+      - name: Commit screenshots to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fastlane/metadata/android/en-US/images/phoneScreenshots/
+          if git diff --cached --quiet; then
+            echo "Screenshots unchanged."
+          else
+            git commit -m "Updated screenshots for ${{ github.ref_name }}"
+            git push origin HEAD:main
+          fi
+
   publish:
+    needs: screenshots
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download screenshots
+        uses: actions/download-artifact@v4
+        with:
+          name: screenshots
+          path: fastlane/metadata/android/en-US/images/phoneScreenshots
+
+      - name: Remove legacy screenshot files
+        run: rm -f fastlane/metadata/android/en-US/images/phoneScreenshots/af_weather_*.png
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -96,6 +176,9 @@ jobs:
             cp -r "$PAGES_DIR/fdroid/repo/." "$FDROID_DIR/repo/"
           fi
 
+          # Drop screenshots with the legacy af_weather_ naming
+          rm -f "$FDROID_DIR/repo/$PACKAGE_ID/en-US/phoneScreenshots"/af_weather_*.png 2>/dev/null || true
+
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
           VERSION_CODE=$(aapt2 dump badging "$APK" \
             | sed -n "s/^package:.* versionCode='\([0-9]*\)'.*/\1/p")
@@ -134,12 +217,15 @@ jobs:
             -storepass "$KEYSTORE_PASSWORD" \
             | grep -m1 'SHA256:' | sed 's/.*SHA256: //; s/://g')
 
-          mkdir -p "$PAGES_DIR/fdroid"
+          mkdir -p "$PAGES_DIR/fdroid" "$PAGES_DIR/screenshots"
           rm -rf "$PAGES_DIR/fdroid/repo" "$PAGES_DIR/fdroid/archive"
           cp -r "$FDROID_DIR/repo" "$PAGES_DIR/fdroid/repo"
           if [ -d "$FDROID_DIR/archive" ]; then
             cp -r "$FDROID_DIR/archive" "$PAGES_DIR/fdroid/archive"
           fi
+
+          cp fastlane/metadata/android/en-US/images/phoneScreenshots/*.png \
+            "$PAGES_DIR/screenshots/"
 
           sed "s|__FINGERPRINT__|$FINGERPRINT|g" fdroid/index.html.tmpl > "$PAGES_DIR/index.html"
           touch "$PAGES_DIR/.nojekyll"

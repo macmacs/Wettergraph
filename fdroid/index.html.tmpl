@@ -34,6 +34,24 @@
     text-decoration: none;
     font-weight: 600;
   }
+  .shots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: flex-start;
+    margin: 1rem 0;
+  }
+  .shots .widget { width: calc(50% - 0.4rem); }
+  .shots .settings { width: min(100%, 22rem); }
+  .shots img {
+    width: 100%;
+    border: 1px solid currentColor;
+    border-radius: 6px;
+    background: #222;
+  }
+  @media (max-width: 40rem) {
+    .shots .widget { width: 100%; }
+  }
   footer { margin-top: 3rem; font-size: 0.85em; opacity: 0.7; }
 </style>
 </head>
@@ -54,6 +72,15 @@ AF Weather Widget.</p>
 <h2>Verify the fingerprint</h2>
 <p>The repository signing key fingerprint (SHA-256) is:</p>
 <span class="url">__FINGERPRINT__</span>
+
+<h2>Screenshots</h2>
+<div class="shots">
+  <img class="widget" src="screenshots/wettergraph_cold.png" alt="Cold winter day" loading="lazy">
+  <img class="widget" src="screenshots/wettergraph_warm.png" alt="Warm summer day" loading="lazy">
+  <img class="widget" src="screenshots/wettergraph_color_black.png" alt="Black theme, rainy day" loading="lazy">
+  <img class="widget" src="screenshots/wettergraph_round_corners.png" alt="Black theme with rounded corners" loading="lazy">
+  <img class="settings" src="screenshots/wettergraph_settings.png" alt="Widget settings" loading="lazy">
+</div>
 
 <footer>
 <p>Upstream project: <a href="https://github.com/Gitsaibot/AF-Weather-Widget">Gitsaibot/AF-Weather-Widget</a>.
