@@ -194,6 +194,28 @@ freeze_clock() {
     adb_shell "cmd alarm set-time $FREEZE_TIME_MS" || true
 }
 
+skip_setup_wizard() {
+    adb_shell settings put global device_provisioned 1 || true
+    adb_shell settings put secure user_setup_complete 1 || true
+    adb_shell am force-stop com.google.android.setupwizard 2>/dev/null || true
+}
+
+dump_ui_debug() {
+    local out
+    out="$(dump_ui)" || { log "uiautomator dump failed" >&2; return 0; }
+    log "current UI text/desc nodes:" >&2
+    python3 - "$out" >&2 <<'PYEOF'
+import sys
+import xml.etree.ElementTree as ET
+tree = ET.parse(sys.argv[1])
+for n in tree.getroot().iter("node"):
+    t = n.attrib.get("text", "")
+    d = n.attrib.get("content-desc", "")
+    if t or d:
+        print(f"  text={t!r} desc={d!r}")
+PYEOF
+}
+
 write_prefs() {
     local theme="$1"
     local xml="$WORK_DIR/prefs.xml"
@@ -369,6 +391,8 @@ fi
 sleep 3
 "$ADB" wait-for-device
 
+skip_setup_wizard
+
 if [[ "$KEEP_APK" -ne 1 ]]; then
     log "building debug APK"
     ( cd "$ROOT" && ./gradlew assembleDebug -q )
@@ -402,6 +426,7 @@ capture_widget_shot() {
     local add_bounds
     add_bounds="$(wait_for_text "Add Widget" 120)" || {
         log "config screen did not appear for $name" >&2
+        dump_ui_debug
         return 1
     }
     tap_bounds "$add_bounds"
