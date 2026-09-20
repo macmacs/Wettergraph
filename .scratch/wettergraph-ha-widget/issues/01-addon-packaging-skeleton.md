@@ -1,7 +1,7 @@
 # Add-on packaging and install skeleton
 
 Type: task
-Status: open
+Status: claimed
 
 ## Question
 
