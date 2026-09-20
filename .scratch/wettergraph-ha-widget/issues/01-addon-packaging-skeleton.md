@@ -1,7 +1,9 @@
 # Add-on packaging and install skeleton
 
 Type: task
-Status: claimed
+Status: awaiting operator
+
+Resolution draft: [assets/01-resolution.md](assets/01-resolution.md)
 
 ## Question
 
@@ -30,7 +32,12 @@ Repo/folder layout, image and build path, chosen port, and the option schema as 
 
 ## Verification (operator installs, then reports)
 
-Operator adds the repo, installs the add-on, opens it, sees the placeholder.
+Operator adds the repo, installs the app, opens it, sees the placeholder.
+
+Checklist, the exact strings to look for, and the two findings this ticket
+produced are in [assets/01-resolution.md](01-resolution.md). Report back: the
+first log line, the `startup check N/N` block, whether the panel appears,
+whether a changed `page_note` shows up without a restart.
 
 ## Refs
 

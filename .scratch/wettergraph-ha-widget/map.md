@@ -55,6 +55,12 @@ _(empty - the frontier is specifiable; anything newly surfaced lands here or bec
 
 Established during charting, so tickets don't re-derive them:
 
+- **The repo is an app repository now.** `repository.yaml` at the root, the app in `wettergraph/` (ticket 01, awaiting the operator's install report).
+- **Supervisor finds apps by globbing `**/config.*`** across the whole repo, skipping only dot-directories and `rootfs`. `fdroid/config.yml` read as a malformed app until it was renamed to `fdroid/fdroid-config.yml`. Never name a file `config.yaml`/`config.yml`/`config.json` unless it is an app config or lives under a dot-directory.
+- **`tools/addon-lint.py`** re-runs that scan plus Supervisor's own voluptuous schema locally, so a bad `config.yaml` is caught without installing anything. `uv run --with pyyaml --with voluptuous python tools/addon-lint.py`.
+- **`ghcr.io/home-assistant/base` is Alpine 3.24** whose repositories point at Alpine 3.24 (its `io.hass.base.image` label says `alpine:3.24` while the layers came from 3.23 - the label is the accurate one). Ubuntu-style `ttf-dejavu` does not exist; the package is `font-dejavu` (main). `uv` is in community, currently 0.11.19-r0.
+- **No container can be built or run in the agent's environment.** Docker is installed but the box lacks `CAP_SYS_ADMIN`, so `unshare` fails and no daemon can start. Verification is the operator's, by design.
+
 - **met.no `locationforecast/2.0/compact`**: unauthenticated, `access-control-allow-origin: *`, sends `expires` + `last-modified`. 89 timeseries entries over ~223 h. `instant.details` carries `air_temperature`; `next_1_hours.details.precipitation_amount` and `next_1_hours.summary.symbol_code` are present; `next_6_hours` also present. Units come in `properties.meta.units`.
 - **met.no browser-side fetching is forbidden** by met.no's own docs ("it is not possible to add your own User-Agent header... Do not use this in production environments") - so the fetch lives server-side in the add-on, never in a dashboard card.
 - **`weathericon` API is dead**: `https://api.met.no/weatherapi/weathericon/2.0/` returns 404 for every variant tried (list, `.png`, `.svg`, legacy `1.1`). The only surviving icon source is this repo's `app/src/main/res/drawable/weather_icon_*.webp` (88 files, ~640K, MET's own art).
