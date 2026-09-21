@@ -35,6 +35,39 @@ SCHEMA_REPOSITORY_CONFIG = vol.Schema(
 # The keys Supervisor's _SCHEMA_APP_CONFIG requires (supervisor/apps/validate.py)
 REQUIRED_APP_KEYS = ("name", "version", "slug", "description", "arch")
 BUILD_SUFFIXES = (".yaml", ".yml", ".json")
+# Images that bring s6-overlay as their own init. They must be PID 1, so the app
+# config must carry `init: false` (Supervisor's default is true, which hands the
+# container to Docker's tini instead) and the Dockerfile must give s6 something
+# to run.
+S6_BASE_IMAGES = ("ghcr.io/home-assistant/base", "ghcr.io/hassio-addons/base")
+
+
+def check_build_files(app_dir, cfg, rel):
+    """Catch the two failure modes that only show up after an install attempt."""
+    problems = []
+    dockerfile = os.path.join(app_dir, "Dockerfile")
+    if not os.path.exists(dockerfile):
+        return problems
+    with open(dockerfile) as fh:
+        text = fh.read()
+
+    uses_s6 = any(base in text for base in S6_BASE_IMAGES)
+    if uses_s6 and cfg.get("init", True) is not False:
+        problems.append(
+            f"{rel}: runs on an s6-overlay base image but does not set `init: false`; "
+            "s6 refuses to run unless it is PID 1 and the container dies with "
+            "'s6-overlay-suexec: fatal: can only run as pid 1'"
+        )
+
+    has_payload = any(
+        line.strip().upper().startswith(("CMD", "ENTRYPOINT")) for line in text.splitlines()
+    )
+    if uses_s6 and not has_payload:
+        problems.append(
+            f"{rel}: Dockerfile has no CMD or ENTRYPOINT; with an s6 base and no "
+            "services the container exits as soon as stage2 finishes"
+        )
+    return problems
 
 
 def _load(path):
@@ -112,6 +145,7 @@ def main():
             app_errors.append(f"{rel}: ingress_port must be an int")
         if not os.path.exists(os.path.join(os.path.dirname(path), "Dockerfile")) and "image" not in cfg:
             app_errors.append(f"{rel}: no Dockerfile next to it and no 'image' key: HA would have nothing to build")
+        app_errors.extend(check_build_files(os.path.dirname(path), cfg, rel))
         errors.extend(app_errors)
         if not app_errors:
             notes.append(f"{rel}: {cfg['name']} v{cfg['version']} slug={cfg['slug']} arch={cfg['arch']}")

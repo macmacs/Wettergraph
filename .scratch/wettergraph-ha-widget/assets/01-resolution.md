@@ -15,6 +15,31 @@ Claim: `Status: claimed`, 2026-09-20.
 | `wettergraph/README.md` | The install steps and the start-here report. |
 | `tools/addon-lint.py` | Re-runs Supervisor's own store scan locally (see below). |
 
+## Install attempt 1: did not start
+
+Operator installed it on HAOS. First start produced:
+
+```
+s6-overlay-suexec: fatal: can only run as pid 1
+```
+
+**Root cause, from Supervisor's own source:** `init` in an app config defaults to `true`
+(`supervisor/apps/model.py`: `default_init` -> `data["init"]`), and
+`supervisor/docker/app.py` passes that straight into Docker as `Init: true`. Docker then
+runs its own tini as PID 1, so the base image's `/init` - s6-overlay, which insists on
+being PID 1 - dies on the spot.
+
+**Two defects fixed, both mine:**
+
+1. `config.yaml` now sets `init: false`.
+2. The Dockerfile had no `CMD` at all. With an s6 base and no services, stage2 finishes
+   and the container exits immediately, so the app would have died even after fixing (1).
+   It now runs `CMD [ "/usr/bin/python3", "/app/server.py" ]`.
+
+Version bumped to `0.1.1` so the store offers an update. Both failure modes are now
+linter gates in `tools/addon-lint.py`, each with a negative control: removing `init: false`
+or the `CMD` makes the linter fail with the message above.
+
 ## Verification evidence
 
 Mechanical, run on this box:

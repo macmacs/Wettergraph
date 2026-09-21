@@ -15,7 +15,7 @@ Home Assistant OS only (native container installs have no app store).
 3. Reload the store page if needed, then install **Wettergraph**.
 4. **Start** it and open the **Log** tab. First line:
 
-   `wettergraph: starting on :8099; options=/data/options.json present=True build=0.1.0`
+   `wettergraph: starting on :8099; options=/data/options.json present=True build=0.1.1`
 
    Followed by a startup check that exercises the real routes in-process
    (HAOS gives you no shell inside the container, so this is the self-test):
@@ -34,7 +34,7 @@ Home Assistant OS only (native container installs have no app store).
    `present=False`, or `options file is readable` showing FAIL, means options
    never reached the container - report that, it is the interesting failure.
    The same check can be re-run from the HA terminal with
-   `docker exec addon_local_wettergraph python3 /app/server.py --self-test`.
+   `docker exec $(docker ps -q -f name=wettergraph | head -1) python3 /app/server.py --self-test`.
 5. Open the **Wettergraph** panel in the sidebar (or the "Open web UI" button).
    You should see the status page with a table of the options.
 6. Change `page_note` under **Configuration**, save, then reload the page.
@@ -70,6 +70,12 @@ Expected measurements:
   No pip, no virtualenv, no interpreter download.
 - `resvg-py` is declared in `wettergraph/app/pyproject.toml` for the renderer
   ticket; it is not imported by the skeleton.
+- `init: false` in `config.yaml` is **required**, not optional: the base image's
+  s6 must be PID 1. Supervisor's `init` defaults to true, which puts Docker's
+  tini in as PID 1 and makes s6 exit with
+  `s6-overlay-suexec: fatal: can only run as pid 1`.
+- The Dockerfile needs a `CMD` for the same reason inverted: without one, s6 has
+  nothing to supervise and the container exits as soon as it finishes starting.
 
 ## Local checks
 

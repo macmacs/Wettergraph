@@ -1,5 +1,5 @@
 name: Wettergraph
-version: "0.1.0"
+version: "0.1.1"
 slug: wettergraph
 description: >-
   Renders a Wettergraph-style forecast image for one place - temperature curve,
@@ -11,6 +11,11 @@ arch:
   - amd64
 startup: application
 boot: auto
+# The base image brings its own init (s6-overlay) and refuses to run unless it
+# is PID 1. Supervisor's `init` key defaults to true, which hands the container
+# to Docker's tini as PID 1 instead, and s6 then dies with
+# "s6-overlay-suexec: fatal: can only run as pid 1".
+init: false
 ports:
   8099/tcp: 8099
 ports_description:

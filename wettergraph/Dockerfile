@@ -27,3 +27,7 @@ RUN printf '#!/bin/sh\nexec /usr/bin/uv --project /app "$@"\n' > /usr/local/bin/
 
 WORKDIR /app
 COPY app/ /app/
+
+# The container's payload. Without a CMD the base image's s6 has nothing to
+# supervise and the container exits as soon as stage2 finishes.
+CMD [ "/usr/bin/python3", "/app/server.py" ]
