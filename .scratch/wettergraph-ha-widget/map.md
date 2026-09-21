@@ -23,18 +23,18 @@ A Home Assistant widget showing a Wettergraph-style forecast graph with **no win
 
 Open tickets are not listed here - they are the files in `issues/`, found by scanning for open + unblocked + unclaimed. What is wired today:
 
-- [Add-on packaging and install skeleton](issues/01-addon-packaging-skeleton.md) - frontier
+- [Add-on packaging and install skeleton](issues/01-addon-packaging-skeleton.md) - resolved
 - [Graph visual specification](issues/02-graph-visual-spec.md) - frontier
 - [Extract the yr weather icon set](issues/03-extract-yr-icon-set.md) - frontier
 - [met.no client and forecast cache](issues/04-metno-client-cache.md) - frontier
 - [Render the graph: temperature, icons, precipitation](issues/05-render-graph.md) - blocked by 02, 03, 04
-- [Auto-updating image endpoint and generic camera](issues/06-image-endpoint-generic-camera.md) - blocked by 01, 05
+- [Auto-updating image endpoint and generic camera](issues/06-image-endpoint-generic-camera.md) - blocked by 05 (01 resolved)
 
 ## Decisions so far
 
 <!-- one line per closed ticket: gist + link to where the detail lives -->
 
-_(empty - no tickets resolved yet)_
+- [Add-on packaging and install skeleton](issues/01-addon-packaging-skeleton.md): the repo is an app repository and the app installs and serves on HAOS - `repository.yaml` at the root, app in `wettergraph/`, pinned base `3.24-2026.08.0`, port 8099, and, on this base image, `init: false` plus an explicit `CMD` are mandatory (both are linter gates).
 
 ## Not yet specified
 
@@ -55,7 +55,7 @@ _(empty - the frontier is specifiable; anything newly surfaced lands here or bec
 
 Established during charting, so tickets don't re-derive them:
 
-- **The repo is an app repository now.** `repository.yaml` at the root, the app in `wettergraph/` (ticket 01, awaiting the operator's install report).
+- **The repo is an app repository now.** `repository.yaml` at the root, the app in `wettergraph/`, installed and serving on the operator's HAOS (ticket 01, resolved).
 - **Supervisor finds apps by globbing `**/config.*`** across the whole repo, skipping only dot-directories and `rootfs`. `fdroid/config.yml` read as a malformed app until it was renamed to `fdroid/fdroid-config.yml`. Never name a file `config.yaml`/`config.yml`/`config.json` unless it is an app config or lives under a dot-directory.
 - **`tools/addon-lint.py`** re-runs that scan plus Supervisor's own voluptuous schema locally, so a bad `config.yaml` is caught without installing anything. `uv run --with pyyaml --with voluptuous python tools/addon-lint.py`.
 - **`ghcr.io/home-assistant/base` is Alpine 3.24** whose repositories point at Alpine 3.24 (its `io.hass.base.image` label says `alpine:3.24` while the layers came from 3.23 - the label is the accurate one). Ubuntu-style `ttf-dejavu` does not exist; the package is `font-dejavu` (main). `uv` is in community, currently 0.11.19-r0.
