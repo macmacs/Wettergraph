@@ -24,10 +24,10 @@ A Home Assistant widget showing a Wettergraph-style forecast graph with **no win
 Open tickets are not listed here - they are the files in `issues/`, found by scanning for open + unblocked + unclaimed. What is wired today:
 
 - [Add-on packaging and install skeleton](issues/01-addon-packaging-skeleton.md) - resolved
-- [Graph visual specification](issues/02-graph-visual-spec.md) - frontier
+- [Graph visual specification](issues/02-graph-visual-spec.md) - resolved
 - [Extract the yr weather icon set](issues/03-extract-yr-icon-set.md) - frontier
 - [met.no client and forecast cache](issues/04-metno-client-cache.md) - frontier
-- [Render the graph: temperature, icons, precipitation](issues/05-render-graph.md) - blocked by 02, 03, 04
+- [Render the graph: temperature, icons, precipitation](issues/05-render-graph.md) - blocked by 03, 04
 - [Auto-updating image endpoint and generic camera](issues/06-image-endpoint-generic-camera.md) - blocked by 05 (01 resolved)
 
 ## Decisions so far
@@ -35,6 +35,7 @@ Open tickets are not listed here - they are the files in `issues/`, found by sca
 <!-- one line per closed ticket: gist + link to where the detail lives -->
 
 - [Add-on packaging and install skeleton](issues/01-addon-packaging-skeleton.md): the repo is an app repository and the app installs and serves on HAOS - `repository.yaml` at the root, app in `wettergraph/`, pinned base `3.24-2026.08.0`, port 8099, and, on this base image, `init: false` plus an explicit `CMD` are mandatory (both are linter gates).
+- [Graph visual specification](issues/02-graph-visual-spec.md): the graph is `assets/graph-spec.md` §1-§10 - a width-knob PNG (default 782x391, always 2:1, clamp 480..1564), light and dark by `theme=`, a 48 h hourly window, a 5 °C fitted axis with one reserved step for the icon row, a Catmull-Rom red curve at 2.5 px, icons every 3 h riding above the curve, one precipitation area with a snapped top, and the last good graph plus an age chip when the data is stale. Layout reference: `assets/graph-reference.svg`.
 
 ## Not yet specified
 
@@ -70,4 +71,6 @@ Established during charting, so tickets don't re-derive them:
 - **met.no symbol codes** are plain `<condition>_<timeofday>`, e.g. `fair_day`, `partlycloudy_night`, `clearsky_night`, `lightrain`. Time-of-day suffix supplies day/night icon selection directly - no separate day/night calculation needed for icons.
 - **yr SVG structure** (asset `assets/meteogram-6325496.svg`, kept only as icon-source reference): 782x391; temp band y≈145-253; precipitation band y≈289-337 (blue); wind band + `Wind m/s` legend below y≈253; all artwork in one `<g transform="translate(0, 84.86)">`.
 - **Rendering toolchain**: no rasterizer was installed (no rsvg/inkscape/chromium/cairo), but `uv run --with resvg-py` works and renders a 782-wide SVG in ~0.07 s. Committed renders: `meteogram-full.png` (the source graph), `v3b-trim-noheader.png` (what "no wind" looks like in the temperature + icon region), `icon-embed-test.png` (webp-in-SVG embed check - the orange sun, renders correctly). Intermediate crop experiments were pruned; the map's git history holds them if ever needed.
+- **`resvg` silently renders no text when no font answers**, and this dev box has no fonts at all (not even DejaVu). A render check must load the font by file path (spec §3.4, `/usr/share/fonts/dejavu/DejaVuSans.ttf` inside the container); otherwise the curve draws fine and the whole axis is blank with no error.
+- **The layout reference exists**: `assets/graph-reference.svg` (hand-made at W=782) and `assets/graph-reference.png` (its resvg preview, drawn in Liberation Sans because the box has no DejaVu). It was drawn before any renderer existed, so ticket 05 has a fixed target to diff against.
 - **yr place `2-6325496`** = Olympia Tower, lat `48.17459`, lon `11.5538` - the place the widget targets.
