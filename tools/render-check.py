@@ -30,7 +30,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "wettergraph" / "app"))
 REFERENCE = ROOT / ".scratch" / "wettergraph-ha-widget" / "assets" / "graph-reference.svg"
 ICONS = ROOT / "wettergraph" / "app" / "icons"
-FONT = os.environ.get("WG_FONT") or "/tmp/DejaVuSans.ttf"
 
 import render  # noqa: E402  (path set above)
 
@@ -38,6 +37,15 @@ try:
     from PIL import Image  # noqa: E402
 except ImportError:  # pragma: no cover - the run line installs pillow
     Image = None
+
+# The checks need a real font: without one resvg draws no text and §3.4's check
+# would report a difference that says nothing about the renderer.
+FONT = os.environ.get("WG_FONT") or ""
+if not Path(FONT).is_file():
+    FONT = next(
+        (str(candidate) for candidate in (render.FONT_PATH, Path("/tmp/DejaVuSans.ttf")) if Path(candidate).is_file()),
+        str(render.FONT_PATH),
+    )
 
 # The renderer reads midnights from the local clock; pin the check to UTC so the
 # parity fixture's Mo/Di land where the reference drew them (Sunday noon start).
@@ -140,6 +148,8 @@ def vertical(lines_els) -> list[float]:
 
 
 # ---------------------------------------------------------------- fixtures
+
+check("the check font file exists", Path(FONT).is_file(), FONT)
 
 parity = fixture(-1.7, 9.9, 0.0, 1.2)  # graph-reference.svg's own numbers
 flat = fixture(10.0, 10.0)

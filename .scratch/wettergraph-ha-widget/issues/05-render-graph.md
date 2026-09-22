@@ -60,7 +60,7 @@ Fixture render, no network, reproducible (fixed `--now`):
 
 **Clause by clause.** `tools/render-check.py` (committed) parses the rendered SVG
 as XML, compares the data-independent geometry against
-`assets/graph-reference.svg`, and prints 56 checks; run it with
+`assets/graph-reference.svg`, and prints 57 checks; run it with
 `uv run --with resvg-py --with pillow python tools/render-check.py`. What it
 covers, by clause:
 
@@ -94,7 +94,7 @@ compiler enters the image.
 **Evidence on this box** (no container can be built here - see map "Verified
 facts"):
 
-- `tools/render-check.py` -> 56/56.
+- `tools/render-check.py` -> 57/57.
 - `server.py --self-test` -> 13/13 (every route, the font file, the fixture render).
 - Determinism: two renders of the same arguments are byte-identical, and each
   committed PNG re-rendered to its committed hash.
@@ -111,7 +111,7 @@ Install step: Settings -> Add-ons -> Add-on Store -> refresh -> **Wettergraph**
 the `render font ... present` line, the first `metno:` line, then the startup
 check block.
 
-- [x] Local: render-check 56/56, self-test 13/13, linter, determinism, samples.
+- [x] Local: render-check 57/57, self-test 13/13, linter, determinism, samples.
 - [ ] The store offers 0.2.0; the app updates, starts, and the log ends with
   `wettergraph: startup check 13/13 passed`.
 - [ ] The panel shows the real graph: temperature curve, one icon every 3 h, the
