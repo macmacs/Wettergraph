@@ -148,8 +148,11 @@ per-request.</p>
 <p><code>{OPTIONS_PATH}</code> - read fresh on every request.</p>
 <table>{rows}</table>
 {data_html()}
-<img src="/image/graph" alt="Wettergraph forecast" width="782">
-<p><a href="/image/graph.svg">intermediate SVG</a> - <a href="/image/graph?theme=dark">dark variant</a> - <a href="/forecast.json">forecast.json</a></p>
+<!-- Relative URLs: the page is also served behind HA ingress, which strips
+     /api/hassio_ingress/<token> before forwarding. A root-absolute path would
+     resolve against the Home Assistant origin there and 404. -->
+<img src="image/graph" alt="Wettergraph forecast" width="782">
+<p><a href="image/graph.svg">intermediate SVG</a> - <a href="image/graph?theme=dark">dark variant</a> - <a href="forecast.json">forecast.json</a></p>
 """
 
 
@@ -250,7 +253,17 @@ def run_checks(bind_port: int = 0) -> list[tuple[str, bool, str]]:
     status, ctype, body = fetch("/")
     page = body.decode(errors="replace")
     rows = page.count("<tr>")
-    checks.append(("/ serves an HTML page", status == 200 and "text/html" in ctype, f"{status} {ctype}"))
+    # Root-absolute links (/image/graph) resolve against the HA origin when the
+    # page is opened through ingress, not against this server.
+    relative_links = 'src="/' not in page and 'href="/' not in page
+    checks.append(
+        (
+            "/ serves an HTML page",
+            status == 200 and "text/html" in ctype and relative_links,
+            f"{status} {ctype}"
+            + ("" if relative_links else " - root-absolute links break behind ingress"),
+        )
+    )
     checks.append(
         (
             "page lists every option",
