@@ -1,7 +1,7 @@
 # met.no client and forecast cache
 
 Type: task
-Status: open
+Status: claimed
 
 ## Question
 
