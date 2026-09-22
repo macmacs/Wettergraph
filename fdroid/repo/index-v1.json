@@ -1,6 +1,6 @@
 {
   "repo": {
-    "timestamp": 1787916648000,
+    "timestamp": 1790104850000,
     "version": 20002,
     "name": "Wettergraph",
     "icon": "icon.png",
@@ -27,7 +27,7 @@
       "lastUpdated": 1787916648000,
       "localized": {
         "en-US": {
-          "description": "This app is a fork of AF Weather Widget. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>",
+          "description": "This app is a fork of AF Weather Widget which is no longer actively developed. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>",
           "icon": "icon_LHbDM9Bw7rH2Ejfn07vCmjIBHRVskRS8KuFZbrud25I=.png",
           "name": "Wettergraph",
           "phoneScreenshots": [
@@ -37,8 +37,7 @@
             "af_weather_settings.png",
             "af_weather_warm.png"
           ],
-          "summary": "Graph weather widget for Android",
-          "whatsNew": "- Renamed app to Wettergraph in labels and store metadata\n- Fixed crash when opening UI Settings\n- Removed leftover upstream Aix references\n- Corrected fork attribution in store description\n"
+          "summary": "Graph weather widget for Android"
         }
       }
     }
@@ -88,7 +87,7 @@
       {
         "added": 1787911814000,
         "apkName": "io.github.macmacs.af_40.apk",
-        "hash": "47d8e6b339bf10805a59c48fa4c2f6b291ec3843d84c67e41318682c392200a9",
+        "hash": "0ac5deb61fffa45e95912c16b457ec618f5f82124bc94f0668eaa43dfb7e751d",
         "hashType": "sha256",
         "minSdkVersion": 29,
         "packageName": "io.github.macmacs.af",

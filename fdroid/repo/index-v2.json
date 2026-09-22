@@ -14,7 +14,7 @@
       }
     },
     "address": "https://macmacs.github.io/Wettergraph/fdroid/repo",
-    "timestamp": 1787916648000,
+    "timestamp": 1790104850000,
     "categories": {
       "Time": {
         "name": {
@@ -73,7 +73,7 @@
           "en-US": "Graph weather widget for Android"
         },
         "description": {
-          "en-US": "This app is a fork of AF Weather Widget. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>"
+          "en-US": "This app is a fork of AF Weather Widget which is no longer actively developed. It is a compact graphical weather graph as a single row Android widget. It was written as a personal project in order to provide a compact graphical weather graph as a single row Android widget. The app met its original design goal at an early version, and most subsequent versions have been bug fixes.\n\nThe source code is dated and not shiny, and there are several hacks used in order to make a graphical widget work on Android. The source code is made public domain as it may provide utility for others.\n\n<b>Weather Sources:</b>\n\n* <a href='https://api.met.no/#english'>Norwegian Meteorological Institute</a>\n* <a href='https://graphical.weather.gov/xml/rest.php'>National Weather Service</a>\n* time zones and geonames from the <a href='https://www.geonames.org/export/web-services.html#timezone'>GeoNames database</a>"
         },
         "icon": {
           "en-US": {
@@ -124,16 +124,13 @@
                 "name": "io.github.macmacs.af.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
               }
             ]
-          },
-          "whatsNew": {
-            "en-US": "- Renamed app to Wettergraph in labels and store metadata\n- Fixed crash when opening UI Settings\n- Removed leftover upstream Aix references\n- Corrected fork attribution in store description\n"
           }
         },
-        "47d8e6b339bf10805a59c48fa4c2f6b291ec3843d84c67e41318682c392200a9": {
+        "0ac5deb61fffa45e95912c16b457ec618f5f82124bc94f0668eaa43dfb7e751d": {
           "added": 1787911814000,
           "file": {
             "name": "/io.github.macmacs.af_40.apk",
-            "sha256": "47d8e6b339bf10805a59c48fa4c2f6b291ec3843d84c67e41318682c392200a9",
+            "sha256": "0ac5deb61fffa45e95912c16b457ec618f5f82124bc94f0668eaa43dfb7e751d",
             "size": 14553074
           },
           "manifest": {
