@@ -1,6 +1,6 @@
 [project]
 name = "wettergraph-ha"
-version = "0.1.0"
+version = "0.2.0"
 description = "Wettergraph image renderer, served as a Home Assistant app"
 requires-python = ">=3.14"
 dependencies = [

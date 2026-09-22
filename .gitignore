@@ -92,3 +92,4 @@ key.properties
 # Python
 __pycache__/
 *.pyc
+.venv/
