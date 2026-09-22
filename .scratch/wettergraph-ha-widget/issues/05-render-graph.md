@@ -1,7 +1,7 @@
 # Render the graph: temperature, icons, precipitation
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 03, 04
 
 ## Question
@@ -119,9 +119,20 @@ the `render font ... present` line, the first `metno:` line, then the startup
 check block.
 
 - [x] Local: render-check 57/57, self-test 13/13, linter, determinism, samples.
-- [ ] The store offers 0.2.0; the app updates, starts, and the log ends with
+- [x] The store offers 0.2.0; the app updates, starts, and the log ends with
   `wettergraph: startup check 13/13 passed`.
-- [ ] The panel shows the real graph: temperature curve, one icon every 3 h, the
+- [x] The panel shows the real graph: temperature curve, one icon every 3 h, the
   precipitation band (or `kein Niederschlag`), German weekday names, no wind. A
   screenshot is the fastest yes.
-- [ ] `http://<ha-host>:8099/image/graph?theme=dark` serves the dark variant.
+- [x] `http://<ha-host>:8099/image/graph?theme=dark` serves the dark variant.
+
+First install (0.2.0): the log ended `startup check 13/13 passed`, but the sidebar
+panel was not there (HA's sidebar entry is opt-in: **Open web UI** or **Add to
+sidebar**) and the panel page's image and links were 404 - the page used
+root-absolute paths, which a browser resolves against the Home Assistant origin
+behind ingress, not against the app.
+
+Fixed in 0.2.1: `server.py` serves the page with relative links, the startup
+check fails if a root-absolute asset link comes back, and the README documents
+the sidebar toggle. Operator then confirmed the panel graph and `?theme=dark`
+on HAOS (2026-09-22).

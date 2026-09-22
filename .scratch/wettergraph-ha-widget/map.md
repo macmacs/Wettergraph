@@ -27,8 +27,8 @@ Open tickets are not listed here - they are the files in `issues/`, found by sca
 - [Graph visual specification](issues/02-graph-visual-spec.md) - resolved
 - [Extract the yr weather icon set](issues/03-extract-yr-icon-set.md) - resolved
 - [met.no client and forecast cache](issues/04-metno-client-cache.md) - resolved
-- [Render the graph: temperature, icons, precipitation](issues/05-render-graph.md) - frontier (was blocked by 03 and 04; both resolved)
-- [Auto-updating image endpoint and generic camera](issues/06-image-endpoint-generic-camera.md) - blocked by 05
+- [Render the graph: temperature, icons, precipitation](issues/05-render-graph.md) - resolved
+- [Auto-updating image endpoint and generic camera](issues/06-image-endpoint-generic-camera.md) - frontier (was blocked by 05)
 
 ## Decisions so far
 
@@ -38,6 +38,7 @@ Open tickets are not listed here - they are the files in `issues/`, found by sca
 - [Graph visual specification](issues/02-graph-visual-spec.md): the graph is `assets/graph-spec.md` §1-§10 - a width-knob PNG (default 782x391, always 2:1, clamp 480..1564), light and dark by `theme=`, a 48 h hourly window, a 5 °C fitted axis with one reserved step for the icon row, a Catmull-Rom red curve at 2.5 px, icons every 3 h riding above the curve, one precipitation area with a snapped top, and the last good graph plus an age chip when the data is stale. Layout reference: `assets/graph-reference.svg`.
 - [Extract the yr weather icon set](issues/03-extract-yr-icon-set.md): 83 met.no codes under `.scratch/wettergraph-ha-widget/assets/icons/` + `index.json`; 7 vector from the meteogram, 76 wrapping the app's webp art (the same MET art); contact sheet `assets/icon-contact-sheet.png`; extraction by `tools/extract-icons.py`.
 - [met.no client and forecast cache](issues/04-metno-client-cache.md): the data side is `wettergraph/app/metno.py` (stdlib only) - an `Expires`-respecting poller with `If-Modified-Since`/304, last-good cache at `/data/forecast-cache.json`, series `{time, temperature, precipitation, symbol_code}` in °C and mm/h, `403`/`429` named and backed off; UA `Wettergraph/0.1.2 (Home Assistant app; +https://github.com/macmacs/Wettergraph)`; 88 samples live; operator confirmed `metno: 200 OK` and 9/9 on HAOS.
+- [Render the graph: temperature, icons, precipitation](issues/05-render-graph.md): the renderer is `wettergraph/app/render.py` (Python + `resvg-py` pinned in `wettergraph/app/uv.lock`, no browser) - one SVG in design units, everything scaled by `k = W/782`, rasterised once; the font is loaded by file path (`/usr/share/fonts/dejavu/DejaVuSans.ttf`, spec §3.4; `font-dejavu` in the Dockerfile); `server.py` serves `/image/graph` as a PNG (plus `/image/graph.svg`) with `?width` (480..1564) and `?theme=light|dark`; `tools/render-check.py` checks the SVG against `assets/graph-reference.svg` clause for clause (57/57) and the committed samples live under `.scratch/wettergraph-ha-widget/assets/`; operator confirmed the log's `startup check 13/13 passed`, the panel graph and the dark variant on HAOS - 0.2.1 had to switch the status page to relative links because root-absolute paths 404 behind ingress.
 
 ## Not yet specified
 
@@ -78,9 +79,9 @@ Established during charting, so tickets don't re-derive them:
 - **yr place `2-6325496`** = Olympia Tower, lat `48.17459`, lon `11.5538` - the place the widget targets.
 - **The icon set is 83 met.no symbol codes**: 21 base names with `_day` / `_night` / `_polartwilight` + 20 single names. MET keeps the extra-s typo in `lightssleetshowersandthunder` / `lightssnowshowersandthunder` and the API sends that spelling; the app's Java switch matches the single-s form and so misses those two conditions (latent app bug, out of scope).
 - **The meteogram holds only 7 icon families** (`01d`, `01n`, `02d`, `03d`, `03n`, `04`, `46`); legacy id `46` is `lightrain`, not fog. Every icon file uses `viewBox="0 0 100 100"` and hangs its art on `<g id="<symbol_code>">`; the 7 vector files rename their defs ids to `<symbol_code>__<part>`.
-- **`wettergraph/Dockerfile` does not install `font-dejavu` yet.** Ticket 05 must add it (spec §3.4) or resvg draws every text node as nothing and the axis comes out blank.
-- **`.scratch/.../assets/icons/` does not ship in the app image.** Ticket 05 must copy it under `wettergraph/app/`; `index.json` is the `symbol_code` -> file table.
+- **`wettergraph/Dockerfile` installs `font-dejavu`** (ticket 05) and `render.py` loads it by file path (spec §3.4); resvg draws every text node as nothing when no font answers, with no error.
+- **The icon set ships in the app image** at `wettergraph/app/icons/` (copied from `.scratch/.../assets/icons/` by ticket 05; `COPY app/ /app/` puts it at `/app/icons`); `index.json` is the `symbol_code` -> file table.
 - **The data side is live in the app (ticket 04).** `wettergraph/app/metno.py` + a `metno-poller` daemon thread in `server.py`; the view is served at `/forecast.json` and on the status page. Ticket 05 reads `ForecastCache.view()`: `samples` (the 4-key dicts), `age_seconds`, `stale` (6 h, spec §8.1), `last_error`, `cache_path`; empty `samples` is the spec §8.3 case.
 - **The live payload is 88 entries: hourly for the first 61 hours, then 6-hourly.** A 48 h / 49 sample window (spec §4.1) is fully inside the hourly run. `Expires` was ~32 min. Tail entries carry only `next_6_hours`; the very last one carries no precipitation hook at all (`precipitation: None`). Units are `celsius`; a non-celsius payload is refused rather than mislabelled (spec §5.7).
-- **The app store only offers an update when `wettergraph/config.yaml` version changes** (now `0.1.2`). Any later ticket whose fix must reach the operator bumps it again.
+- **The app store only offers an update when `wettergraph/config.yaml` version changes** (now `0.2.1`). Any later ticket whose fix must reach the operator bumps it again.
 - **A live 403 is not reproducible on demand**: met.no accepted a bare `python-urllib` User-Agent in a probe. The app sends the descriptive UA anyway; the 403 path is verified against a fake server.
