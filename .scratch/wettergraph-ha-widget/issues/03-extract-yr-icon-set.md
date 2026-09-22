@@ -1,7 +1,7 @@
 # Extract the yr weather icon set
 
 Type: task
-Status: open
+Status: claimed
 
 ## Question
 
