@@ -1,5 +1,5 @@
 name: Wettergraph
-version: "0.2.1"
+version: "0.3.0"
 slug: wettergraph
 description: >-
   Renders a Wettergraph-style forecast image for one place - temperature curve,
@@ -11,6 +11,13 @@ arch:
   - amd64
 startup: application
 boot: auto
+# The fallback route of ticket 06: when the HA instance cannot reach this app's
+# port, HA still reads a file, so the graph is also written to
+# /share/wettergraph/graph.png for the Local file camera. Inside an app
+# container /config is the app's *own* public config folder, not Home
+# Assistant's, hence /share.
+map:
+  - share:rw
 # The base image brings its own init (s6-overlay) and refuses to run unless it
 # is PID 1. Supervisor's `init` key defaults to true, which hands the container
 # to Docker's tini as PID 1 instead, and s6 then dies with
@@ -32,9 +39,16 @@ options:
   latitude: 48.1746
   longitude: 11.5538
   update_interval: 15
+  image_width: 782
+  image_theme: light
 schema:
   page_note: str
   place_id: str
   latitude: float(-90,90)
   longitude: float(-180,180)
   update_interval: int(5,180)
+  # The two knobs the served image follows when the URL asks for nothing
+  # (graph-spec §1.2 clamps, §2.2 falls back to light). A dashboard URL can
+  # still override both per request.
+  image_width: int(480,1564)
+  image_theme: list(light|dark)
