@@ -40,6 +40,58 @@ BUILD_SUFFIXES = (".yaml", ".yml", ".json")
 # container to Docker's tini instead) and the Dockerfile must give s6 something
 # to run.
 S6_BASE_IMAGES = ("ghcr.io/home-assistant/base", "ghcr.io/hassio-addons/base")
+# supervisor/apps/validate.py: RE_VOLUME - the folder types an app may map in.
+# A typo here is quiet at install time and only shows up as a missing folder at
+# runtime, which is exactly the kind of failure this linter exists to catch.
+RE_VOLUME = re.compile(
+    r"^(data|config|ssl|local_apps|addons|backup|share|media|homeassistant_config|"
+    r"all_app_configs|all_addon_configs|app_config|addon_config)(?::(rw|ro))?$"
+)
+# Supervisor logs these as deprecated (2026.07 names); the app-based ones replace them.
+DEPRECATED_MAP_TYPES = {
+    "addons": "local_apps",
+    "all_addon_configs": "all_app_configs",
+    "addon_config": "app_config",
+    "config": "homeassistant_config",
+}
+
+
+def check_map(cfg, rel):
+    """Every map entry must name a folder type Supervisor knows."""
+    problems, warnings = [], []
+    entries = cfg.get("map")
+    if entries is None:
+        return problems, warnings
+    if not isinstance(entries, list):
+        return [f"{rel}: map must be a list, got {type(entries).__name__}"], warnings
+    for entry in entries:
+        name = entry.get("type") if isinstance(entry, dict) else entry
+        if not isinstance(name, str) or not RE_VOLUME.match(name):
+            problems.append(
+                f"{rel}: map entry {entry!r} is not a folder type Supervisor maps; "
+                "the folder would never appear in the container"
+            )
+            continue
+        legacy = DEPRECATED_MAP_TYPES.get(name.split(":")[0])
+        if legacy:
+            warnings.append(f"{rel}: map {name!r} is a deprecated name; use {legacy!r}")
+    return problems, warnings
+
+
+def check_options(cfg, rel):
+    """options and schema have to stay in step: the UI shows one, the app reads the other."""
+    warnings = []
+    options = cfg.get("options") or {}
+    schema = cfg.get("schema") or {}
+    if not isinstance(options, dict) or not isinstance(schema, dict):
+        return [f"{rel}: options and schema must be mappings"]
+    missing = sorted(set(schema) - set(options))
+    extra = sorted(set(options) - set(schema))
+    if missing:
+        warnings.append(f"{rel}: schema has {missing} with no default under options")
+    if extra:
+        warnings.append(f"{rel}: options has {extra} which the schema does not declare")
+    return warnings
 
 
 def check_build_files(app_dir, cfg, rel):
@@ -97,7 +149,7 @@ def find_app_configs(root):
 
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
-    errors, notes = [], []
+    errors, notes, warnings = [], [], []
 
     # A file literally named config.yml would also be picked up by the Home
     # Assistant app store as an app config, so this one carries a prefixed name.
@@ -146,12 +198,18 @@ def main():
         if not os.path.exists(os.path.join(os.path.dirname(path), "Dockerfile")) and "image" not in cfg:
             app_errors.append(f"{rel}: no Dockerfile next to it and no 'image' key: HA would have nothing to build")
         app_errors.extend(check_build_files(os.path.dirname(path), cfg, rel))
+        map_errors, map_warnings = check_map(cfg, rel)
+        app_errors.extend(map_errors)
+        warnings.extend(map_warnings)
+        warnings.extend(check_options(cfg, rel))
         errors.extend(app_errors)
         if not app_errors:
             notes.append(f"{rel}: {cfg['name']} v{cfg['version']} slug={cfg['slug']} arch={cfg['arch']}")
 
     for note in notes:
         print(f"ok   {note}")
+    for warning in warnings:
+        print(f"warn {warning}")
     for err in errors:
         print(f"FAIL {err}")
     if errors:
