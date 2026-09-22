@@ -4,7 +4,10 @@ The widget. It starts, polls met.no's `locationforecast/2.0/compact` on the
 schedule met.no itself asks for, caches the last good forecast under `/data`,
 and serves a status page, the normalised forecast as JSON, and the graph itself
 as a PNG: temperature curve, weather icons, precipitation band, no wind
-anywhere. See the map in `.scratch/wettergraph-ha-widget/map.md`.
+anywhere. Home Assistant's own Generic Camera polls that PNG for a dashboard
+card, and a copy of it is kept in `/share` for the case where the HA instance
+cannot reach the app's port. See the map in
+`.scratch/wettergraph-ha-widget/map.md`.
 
 ## Install
 
@@ -17,8 +20,9 @@ Home Assistant OS only (native container installs have no app store).
 3. Reload the store page if needed, then install **Wettergraph**.
 4. **Start** it and open the **Log** tab. First lines:
 
-   `wettergraph: starting on :8099; options=/data/options.json present=True build=0.2.1`
-   `wettergraph: met.no UA='Wettergraph/0.2.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph)' cache=/data/forecast-cache.json`
+   `wettergraph: starting on :8099; options=/data/options.json present=True build=0.3.0`
+   `wettergraph: met.no UA='Wettergraph/0.3.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph)' cache=/data/forecast-cache.json`
+   `wettergraph: share target /share/wettergraph/graph.png`
    `wettergraph: render font /usr/share/fonts/dejavu/DejaVuSans.ttf present, icons /app/icons`
 
    Then the poller's first line - `metno: 200 OK, 88 samples cached to
@@ -30,19 +34,29 @@ Home Assistant OS only (native container installs have no app store).
    ```
    wettergraph: PASS  /health returns 200 ok  (200 b'ok\n')
    wettergraph: PASS  / serves an HTML page  (200 text/html; charset=utf-8)
-   wettergraph: PASS  page lists every option  (5 rows for 5 options)
-   wettergraph: PASS  option values reach the page  (latitude=48.1746)
-   wettergraph: PASS  /image/graph serves a 782x391 PNG  (200 image/png 24875B 782x391)
-   wettergraph: PASS  /image/graph honours ?width (clamped) and ?theme  (200 480px)
-   wettergraph: PASS  /image/graph.svg serves the intermediate SVG, no wind  (200 image/svg+xml; charset=utf-8 43632B)
+   wettergraph: PASS  page lists every option  (7 rows for 7 options)
+   wettergraph: PASS  option values reach the page  (image_theme='light')
+   wettergraph: PASS  the page carries the Generic Camera URL and the file fallback  (3597B page)
+   wettergraph: PASS  /image/graph serves a PNG at the option width (782x391)  (200 image/png 24875B 782x391)
+   wettergraph: PASS  the image is served uncacheable and reports its data age  ('no-store, no-cache, must-revalidate, max-age=0' age='121')
+   wettergraph: PASS  /image/graph honours ?width (clamped) and ?theme over the options  (200 480px against the option's 782px (light))
+   wettergraph: PASS  /image/graph.svg serves the intermediate SVG, no wind  (200 image/svg+xml; charset=utf-8 36769B)
    wettergraph: PASS  render font is readable (graph-spec §3.4)  (/usr/share/fonts/dejavu/DejaVuSans.ttf)
-   wettergraph: PASS  renderer draws the curve, 16 icons and the band (fixture)  (43613B SVG, 16 icons)
+   wettergraph: PASS  renderer draws the curve, 16 icons and the band (fixture)  (43601B SVG, 16 icons)
+   wettergraph: PASS  ?age=1 draws the age chip (the card's only moving pixel)  (chip reads 'vor 5 min' 5 min after the fetch)
+   wettergraph: PASS  the fallback copy is in step (/share/wettergraph/graph.png)  (24875B on disk, 24875B served, 0 write(s) this run)
    wettergraph: PASS  unknown paths 404  (404)
    wettergraph: PASS  options file is readable  (/data/options.json)
    wettergraph: PASS  /forecast.json serves the normalised series  (200 88 samples)
-   wettergraph: PASS  met.no User-Agent is descriptive  (Wettergraph/0.2.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph))
-   wettergraph: startup check 13/13 passed
+   wettergraph: PASS  met.no User-Agent is descriptive  (Wettergraph/0.3.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph))
+   wettergraph: startup check 17/17 passed
    ```
+
+   The byte counts and the sample count are yours; the paths and the check
+   names are the same everywhere. `the fallback copy is in step` FAILing means
+   `/share` is not mapped into the container (or is not writable) - the
+   dashboard path does not use it, but the Local file camera fallback (see
+   **The dashboard**) then has nothing to read.
 
    `render font is readable` FAILing means the image will render with every
    text node missing (resvg draws nothing when no font answers) - report it.
@@ -75,7 +89,7 @@ fetches `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=&lon=`
 writes it to `/data/forecast-cache.json`.
 
 - **User-Agent**, required by met.no:
-  `Wettergraph/0.2.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph)`
+  `Wettergraph/0.3.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph)`
   (`BUILD_VERSION`, so a version bump changes it).
 - **Polling follows met.no's `Expires` header**: the next request is not sent
   before it. Once it has passed, the request carries `If-Modified-Since`, and a
@@ -100,6 +114,8 @@ Where to look:
   `age_seconds`, `stale`, `last_error`, `expires_at`, `cache_path`
 - log - one `metno:` line per poll, roughly every 30-60 min, `304 Not Modified`
   when the model has not changed
+- log - one `share wrote ...` line each time the `/share` copy changes (so
+  after startup and after each new forecast)
 
 The series shape the renderer consumes, one entry per met.no timeseries entry:
 
@@ -157,6 +173,68 @@ all the frame plus `noch keine Daten` and the last error.
   clause checks, including geometry parity against
   `assets/graph-reference.svg`.
 
+## The dashboard (ticket 06)
+
+The card is Home Assistant's own **Generic Camera**: no HACS, no custom card,
+nothing to keep updated. It fetches `http://<ha-host>:8099/image/graph`, and HA
+re-reads that image on its own schedule, so the graph stays current with nobody
+touching the dashboard.
+
+1. Settings -> Devices & services -> **Add integration** -> **Generic Camera**.
+2. **Still Image URL**: `http://<ha-host>:8099/image/graph?width=782&theme=light`
+   (`<ha-host>` is the address you use for Home Assistant; `/image/graph` alone
+   works too and then follows the app's options). Leave **Stream Source** empty.
+3. Leave the advanced section at its defaults. **The `frame_interval` option
+   this integration used to have is gone**: what is left is *Frame rate*, and
+   that is only a floor for repeated fetches of the same URL
+   (`frame_interval = 1 / frame rate`, default 2). It does not set the refresh
+   schedule, so there is nothing to copy `update_interval` into.
+4. The dialog fetches the URL and shows a preview, so a wrong host or port
+   fails right there rather than silently on the dashboard. Then add it to a
+   card (**Picture entity** or **Picture glance**), or use the camera entity
+   `camera.wettergraph` anywhere.
+
+**Where the cadence comes from.** met.no decides when the data changes: the
+app does not poll before its `Expires`, so new data lands every ~30-60 min, with
+`update_interval` as the floor. Home Assistant then re-reads the image by
+itself about every 5 minutes - the camera access token in
+`/api/camera_proxy/camera.wettergraph?token=...` rotates on that interval, which
+changes the URL the dashboard asks for. Nothing on the way caches: the endpoint
+answers `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` plus
+`Pragma: no-cache`, and a fresh frame is therefore what the card draws.
+
+**How to watch it refresh.** Add `&age=1` to the URL in the camera config. That
+draws the age chip graph-spec §8.2 reserves for stale data, now on fresh data,
+with minutes instead of hours under an hour (`vor 4 min`). The number moves, so
+a wall-mounted dashboard proves by itself that it is re-reading the image.
+Without the switch the image carries no clock at all (§9.4).
+
+**Diagnostics.**
+
+- `curl -sD- -o/dev/null http://<ha-host>:8099/image/graph | head` - the
+  response headers, including `X-Wettergraph-Age` (seconds since the last
+  successful met.no fetch) and the cache headers above.
+- The app log prints one line per request the camera makes, from HA's own IP:
+  `wettergraph: <ha-ip> "GET /image/graph?width=782&theme=light HTTP/1.1" 200`.
+  A line every ~5 minutes is the dashboard refreshing itself.
+- `http://<ha-host>:8099/` shows the URL to paste, the cadence it is running
+  with, and the state of the `/share` copy.
+
+**Fallback: when Home Assistant cannot reach port 8099.** Some installs (port
+conflict, firewall, HA in its own Docker network) cannot dial the app. HA can
+still read a file, so the app writes the same PNG - same options, same render -
+to:
+
+    /share/wettergraph/graph.png
+
+`map: - share:rw` in `config.yaml` is what makes that folder writable; the file
+is rewritten only when the picture actually changes, so a quiet hour costs one
+render a minute and no disk writes. To use it, add a **Local file** camera
+(same *Add integration* dialog) with that path as its *File path*. HA core reads
+the file directly, so no port, no HTTP, and nothing to reach. `/config` is *not*
+usable for this: inside an app container `/config` is the app's own public
+config folder, not Home Assistant's.
+
 ## Configuration
 
 | Option | Default | Meaning |
@@ -166,6 +244,14 @@ all the frame plus `noch keine Daten` and the last error.
 | `latitude` | `48.1746` | 4 decimals on purpose: met.no caches on ~4 decimals. |
 | `longitude` | `11.5538` | Same reason. |
 | `update_interval` | `15` | Minutes between refreshes. Used when met.no serves no `Expires` header; `Expires` wins when present. |
+| `image_width` | `782` | Width of the image the app serves when the URL asks for nothing, clamped to 480..1564 (graph-spec §1.2). Height is always `width / 2`. |
+| `image_theme` | `light` | `light` or `dark` when the URL asks for nothing (§2.2). |
+
+The last two are the **defaults**: the status page's own image, the `/share`
+copy and any bare `/image/graph` follow them, while `?width=` and `?theme=` in a
+URL still win per request, so one dashboard can be dark at 1044 px while another
+is light at 782. Change either under **Configuration** and the next request uses
+it - no rebuild, nothing to reinstall.
 
 ## How it is built
 
@@ -196,10 +282,11 @@ all the frame plus `noch keine Daten` and the last error.
     uv run --project wettergraph/app python wettergraph/app/render.py --cache /tmp/wg/forecast-cache.json --out /tmp/sample.png
 
     # the whole app; needs an options file, and WG_FONT on a box with no DejaVu
-    # at the container's path (this development box has no system fonts at all)
-    WG_OPTIONS=/tmp/options.json WG_FONT=/tmp/DejaVuSans.ttf WG_DATA=/tmp/wg \
+    # at the container's path, WG_SHARE where there is no /share (this dev box
+    # has neither)
+    WG_OPTIONS=/tmp/options.json WG_FONT=/tmp/DejaVuSans.ttf WG_DATA=/tmp/wg WG_SHARE=/tmp/wg/share \
       uv run --project wettergraph/app python wettergraph/app/server.py --self-test
-    WG_OPTIONS=/tmp/options.json WG_FONT=/tmp/DejaVuSans.ttf WG_DATA=/tmp/wg \
+    WG_OPTIONS=/tmp/options.json WG_FONT=/tmp/DejaVuSans.ttf WG_DATA=/tmp/wg WG_SHARE=/tmp/wg/share \
       uv run --project wettergraph/app python wettergraph/app/server.py   # then http://localhost:8099/
 
     python3 wettergraph/app/metno.py --cache-dir /tmp/wg --once   # one real fetch
