@@ -88,3 +88,7 @@ gen-external-apklibs
 output.json
 # API keys
 key.properties
+
+# Python
+__pycache__/
+*.pyc

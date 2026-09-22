@@ -1,23 +1,34 @@
-"""Placeholder service for the Wettergraph app.
+"""The Wettergraph app service.
 
-This ticket installs nothing but the skeleton: it proves the app starts, that
-Supervisor's options reach us at /data/options.json, and that something is
-actually served on the configured port. The page reads its values from the
-options file on every request, so editing an option in the UI changes the page
-with no rebuild.
+It proves the app starts, that Supervisor's options reach us at
+/data/options.json, and, since ticket 04, that the met.no data side runs: a
+daemon thread polls ``locationforecast/2.0/compact`` when ``Expires`` allows,
+caches the last good series under ``/data``, and keeps serving it when met.no
+is unreachable. The status page and ``/forecast.json`` show that state; the
+image itself is still a placeholder until the renderer ticket.
+
+The page reads its values from the options file on every request, so editing an
+option in the UI changes the page with no rebuild.
 """
 
 from __future__ import annotations
 
+import html
 import json
 import os
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import metno
+
 OPTIONS_PATH = Path(os.environ.get("WG_OPTIONS", "/data/options.json"))
 DATA_DIR = Path("/data")
 STARTED_AT = time.time()
+
+# Set in main() (or in --self-test mode); the request handler reads it.
+CACHE: metno.ForecastCache | None = None
 
 # Placeholder asset, replaced by the real met.no-driven render later.
 SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="782" height="391" viewBox="0 0 782 391">
@@ -42,6 +53,64 @@ def options() -> dict:
         return {"_error": f"invalid JSON: {exc}"}
 
 
+def cache_for(opts: dict) -> metno.ForecastCache:
+    """Build the met.no client from the app options, with defaults."""
+    place_id, lat, lon, interval = place_from(opts)
+    return metno.ForecastCache(
+        place_id=place_id,
+        lat=lat,
+        lon=lon,
+        update_interval_minutes=interval,
+    )
+
+
+def place_from(opts: dict) -> tuple[str, float, float, int]:
+    """Options -> (place_id, lat, lon, update_interval), never raises."""
+
+    def number(name: str, default: float) -> float:
+        try:
+            return float(opts.get(name, default))
+        except (TypeError, ValueError):
+            return float(default)
+
+    return (
+        str(opts.get("place_id") or metno.PLACE_ID_DEFAULT),
+        number("latitude", metno.LAT_DEFAULT),
+        number("longitude", metno.LON_DEFAULT),
+        int(number("update_interval", 15)),
+    )
+
+
+def reconfigure(cache: metno.ForecastCache) -> None:
+    """Re-read the options before each poll: place and cadence change live."""
+    place_id, lat, lon, interval = place_from(options())
+    cache.reconfigure(
+        place_id=place_id, lat=lat, lon=lon, update_interval_minutes=interval
+    )
+
+
+def data_html() -> str:
+    """The data-layer line on the status page."""
+    if CACHE is None:
+        return "<p>forecast data: data layer not started</p>"
+    view = CACHE.view()
+    age = view["age_seconds"]
+    if age is None:
+        age_text = "never"
+    elif age < 3600:
+        age_text = f"{age // 60} min"
+    else:
+        age_text = f"{age / 3600:.1f} h"
+    state = "STALE" if view["stale"] else ("fresh" if view["samples"] else "empty")
+    return (
+        f"<p>forecast data: <b>{len(view['samples'])}</b> samples, last fetch {age_text} ago "
+        f"({state}), outcome <code>{html.escape(view['last_outcome'])}</code>, "
+        f"last error <code>{html.escape(view['last_error'] or 'none')}</code></p>"
+        f"<p>met.no cache: <code>{html.escape(view['cache_path'])}</code> - raw view at "
+        f"<code>/forecast.json</code></p>"
+    )
+
+
 def page_html(opts: dict) -> str:
     rows = "".join(
         f"<tr><th>{k}</th><td>{v}</td></tr>" for k, v in sorted(opts.items())
@@ -62,6 +131,7 @@ def page_html(opts: dict) -> str:
 <p>Skeleton is up. Rendering is not implemented yet.</p>
 <p><code>{OPTIONS_PATH}</code> - read fresh on every request.</p>
 <table>{rows}</table>
+{data_html()}
 <img src="/image/graph" alt="placeholder graph" width="782">
 """
 
@@ -89,6 +159,19 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, b"ok\n", "text/plain; charset=utf-8", "no-store")
             return
 
+        if path == "/forecast.json":
+            view = CACHE.view() if CACHE else {
+                "samples": [],
+                "last_error": "data layer not started",
+            }
+            self._send(
+                200,
+                json.dumps(view, indent=2).encode(),
+                "application/json; charset=utf-8",
+                "no-store",
+            )
+            return
+
         if path in ("/image/graph", "/image/graph.svg"):
             svg = SVG.format(
                 bg="#10131a",
@@ -106,16 +189,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt: str, *args) -> None:
         print(f"wettergraph: {self.address_string()} {fmt % args}", flush=True)
-
-
-def main() -> None:
-    port = int(os.environ.get("WG_PORT", "8099"))
-    print(
-        f"wettergraph: starting on :{port}; options={OPTIONS_PATH} "
-        f"present={OPTIONS_PATH.exists()} build={os.environ.get('BUILD_VERSION', 'dev')}",
-        flush=True,
-    )
-    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
 
 
 def run_checks(bind_port: int = 0) -> list[tuple[str, bool, str]]:
@@ -175,6 +248,33 @@ def run_checks(bind_port: int = 0) -> list[tuple[str, bool, str]]:
     checks.append(("unknown paths 404", status == 404, str(status)))
     checks.append(("options file is readable", OPTIONS_PATH.exists(), str(OPTIONS_PATH)))
 
+    status, ctype, body = fetch("/forecast.json")
+    ok = status == 200 and "application/json" in ctype
+    detail = f"{status} {ctype}"
+    if ok:
+        try:
+            doc = json.loads(body)
+            needed = {
+                "place", "samples", "fetched_at", "age_seconds", "stale",
+                "last_outcome", "last_error", "cache_path",
+            }
+            missing = sorted(needed - set(doc))
+            ok = not missing
+            detail = f"{status} {len(doc.get('samples', []))} samples" + (
+                f", missing keys: {missing}" if missing else ""
+            )
+        except json.JSONDecodeError as exc:
+            ok = False
+            detail = f"{status} invalid JSON: {exc}"
+    checks.append(("/forecast.json serves the normalised series", ok, detail))
+    checks.append(
+        (
+            "met.no User-Agent is descriptive",
+            metno.USER_AGENT.startswith("Wettergraph/") and "+http" in metno.USER_AGENT,
+            metno.USER_AGENT,
+        )
+    )
+
     httpd.shutdown()
     return checks
 
@@ -189,19 +289,35 @@ def report(checks: list[tuple[str, bool, str]]) -> int:
 
 
 def main() -> None:
+    global CACHE
     port = int(os.environ.get("WG_PORT", "8099"))
     print(
         f"wettergraph: starting on :{port}; options={OPTIONS_PATH} "
         f"present={OPTIONS_PATH.exists()} build={os.environ.get('BUILD_VERSION', 'dev')}",
         flush=True,
     )
+    CACHE = cache_for(options())
+    print(f"wettergraph: met.no UA={metno.USER_AGENT!r} cache={CACHE.cache_path()}", flush=True)
+    stop = threading.Event()
+    threading.Thread(
+        target=CACHE.run_forever,
+        args=(stop,),
+        kwargs={"reconfigure": reconfigure},
+        name="metno-poller",
+        daemon=True,
+    ).start()
     # Report into the app log, where the operator can actually read it: HAOS
     # gives no shell inside an app container.
     report(run_checks())
-    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    try:
+        ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    finally:
+        stop.set()
 
 
 if __name__ == "__main__":
     if "--self-test" in os.sys.argv:
+        CACHE = cache_for(options())
+        CACHE.load()
         os.sys.exit(1 if report(run_checks(int(os.environ.get("WG_PORT", "8099")))) else 0)
     main()
