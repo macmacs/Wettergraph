@@ -25,7 +25,7 @@ Open tickets are not listed here - they are the files in `issues/`, found by sca
 
 - [Add-on packaging and install skeleton](issues/01-addon-packaging-skeleton.md) - resolved
 - [Graph visual specification](issues/02-graph-visual-spec.md) - resolved
-- [Extract the yr weather icon set](issues/03-extract-yr-icon-set.md) - frontier
+- [Extract the yr weather icon set](issues/03-extract-yr-icon-set.md) - resolved
 - [met.no client and forecast cache](issues/04-metno-client-cache.md) - frontier
 - [Render the graph: temperature, icons, precipitation](issues/05-render-graph.md) - blocked by 03, 04
 - [Auto-updating image endpoint and generic camera](issues/06-image-endpoint-generic-camera.md) - blocked by 05 (01 resolved)
@@ -36,6 +36,7 @@ Open tickets are not listed here - they are the files in `issues/`, found by sca
 
 - [Add-on packaging and install skeleton](issues/01-addon-packaging-skeleton.md): the repo is an app repository and the app installs and serves on HAOS - `repository.yaml` at the root, app in `wettergraph/`, pinned base `3.24-2026.08.0`, port 8099, and, on this base image, `init: false` plus an explicit `CMD` are mandatory (both are linter gates).
 - [Graph visual specification](issues/02-graph-visual-spec.md): the graph is `assets/graph-spec.md` §1-§10 - a width-knob PNG (default 782x391, always 2:1, clamp 480..1564), light and dark by `theme=`, a 48 h hourly window, a 5 °C fitted axis with one reserved step for the icon row, a Catmull-Rom red curve at 2.5 px, icons every 3 h riding above the curve, one precipitation area with a snapped top, and the last good graph plus an age chip when the data is stale. Layout reference: `assets/graph-reference.svg`.
+- [Extract the yr weather icon set](issues/03-extract-yr-icon-set.md): 83 met.no codes under `.scratch/wettergraph-ha-widget/assets/icons/` + `index.json`; 7 vector from the meteogram, 76 wrapping the app's webp art (the same MET art); contact sheet `assets/icon-contact-sheet.png`; extraction by `tools/extract-icons.py`.
 
 ## Not yet specified
 
@@ -67,10 +68,14 @@ Established during charting, so tickets don't re-derive them:
 - **met.no `locationforecast/2.0/compact`**: unauthenticated, `access-control-allow-origin: *`, sends `expires` + `last-modified`. 89 timeseries entries over ~223 h. `instant.details` carries `air_temperature`; `next_1_hours.details.precipitation_amount` and `next_1_hours.summary.symbol_code` are present; `next_6_hours` also present. Units come in `properties.meta.units`.
 - **met.no browser-side fetching is forbidden** by met.no's own docs ("it is not possible to add your own User-Agent header... Do not use this in production environments") - so the fetch lives server-side in the add-on, never in a dashboard card.
 - **`weathericon` API is dead**: `https://api.met.no/weatherapi/weathericon/2.0/` returns 404 for every variant tried (list, `.png`, `.svg`, legacy `1.1`). The only surviving icon source is this repo's `app/src/main/res/drawable/weather_icon_*.webp` (88 files, ~640K, MET's own art).
-- **Two viable icon sources exist**: (a) the repo's webp files - verified to embed as a data URI and render via `resvg`; (b) yr's meteogram SVG, which contains cleanly extractable icon groups keyed by MET symbol (`01d__01d__a`, `03n__03n__*`, `04__04__*`...). Operator chose (b).
+- **Two viable icon sources exist**: (a) the repo's webp files - verified to embed as a data URI and render via `resvg`; (b) yr's meteogram SVG, which contains cleanly extractable icon groups keyed by MET symbol (`01d__01d__a`, `03n__03n__*`, `04__04__*`...). Operator chose (b); ticket 03 used it for the 7 codes the meteogram holds and (a) for the remaining 76, because the art is the same.
 - **met.no symbol codes** are plain `<condition>_<timeofday>`, e.g. `fair_day`, `partlycloudy_night`, `clearsky_night`, `lightrain`. Time-of-day suffix supplies day/night icon selection directly - no separate day/night calculation needed for icons.
 - **yr SVG structure** (asset `assets/meteogram-6325496.svg`, kept only as icon-source reference): 782x391; temp band y≈145-253; precipitation band y≈289-337 (blue); wind band + `Wind m/s` legend below y≈253; all artwork in one `<g transform="translate(0, 84.86)">`.
 - **Rendering toolchain**: no rasterizer was installed (no rsvg/inkscape/chromium/cairo), but `uv run --with resvg-py` works and renders a 782-wide SVG in ~0.07 s. Committed renders: `meteogram-full.png` (the source graph), `v3b-trim-noheader.png` (what "no wind" looks like in the temperature + icon region), `icon-embed-test.png` (webp-in-SVG embed check - the orange sun, renders correctly). Intermediate crop experiments were pruned; the map's git history holds them if ever needed.
 - **`resvg` silently renders no text when no font answers**, and this dev box has no fonts at all (not even DejaVu). A render check must load the font by file path (spec §3.4, `/usr/share/fonts/dejavu/DejaVuSans.ttf` inside the container); otherwise the curve draws fine and the whole axis is blank with no error.
 - **The layout reference exists**: `assets/graph-reference.svg` (hand-made at W=782) and `assets/graph-reference.png` (its resvg preview, drawn in Liberation Sans because the box has no DejaVu). It was drawn before any renderer existed, so ticket 05 has a fixed target to diff against.
 - **yr place `2-6325496`** = Olympia Tower, lat `48.17459`, lon `11.5538` - the place the widget targets.
+- **The icon set is 83 met.no symbol codes**: 21 base names with `_day` / `_night` / `_polartwilight` + 20 single names. MET keeps the extra-s typo in `lightssleetshowersandthunder` / `lightssnowshowersandthunder` and the API sends that spelling; the app's Java switch matches the single-s form and so misses those two conditions (latent app bug, out of scope).
+- **The meteogram holds only 7 icon families** (`01d`, `01n`, `02d`, `03d`, `03n`, `04`, `46`); legacy id `46` is `lightrain`, not fog. Every icon file uses `viewBox="0 0 100 100"` and hangs its art on `<g id="<symbol_code>">`; the 7 vector files rename their defs ids to `<symbol_code>__<part>`.
+- **`wettergraph/Dockerfile` does not install `font-dejavu` yet.** Ticket 05 must add it (spec §3.4) or resvg draws every text node as nothing and the axis comes out blank.
+- **`.scratch/.../assets/icons/` does not ship in the app image.** Ticket 05 must copy it under `wettergraph/app/`; `index.json` is the `symbol_code` -> file table.
