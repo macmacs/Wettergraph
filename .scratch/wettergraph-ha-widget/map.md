@@ -28,7 +28,7 @@ Open tickets are not listed here - they are the files in `issues/`, found by sca
 - [Extract the yr weather icon set](issues/03-extract-yr-icon-set.md) - resolved
 - [met.no client and forecast cache](issues/04-metno-client-cache.md) - resolved
 - [Render the graph: temperature, icons, precipitation](issues/05-render-graph.md) - resolved
-- [Auto-updating image endpoint and generic camera](issues/06-image-endpoint-generic-camera.md) - frontier (was blocked by 05)
+- [Auto-updating image endpoint and generic camera](issues/06-image-endpoint-generic-camera.md) - claimed; built, answer recorded in the ticket, waiting on the operator's install report
 
 ## Decisions so far
 
@@ -85,3 +85,5 @@ Established during charting, so tickets don't re-derive them:
 - **The live payload is 88 entries: hourly for the first 61 hours, then 6-hourly.** A 48 h / 49 sample window (spec §4.1) is fully inside the hourly run. `Expires` was ~32 min. Tail entries carry only `next_6_hours`; the very last one carries no precipitation hook at all (`precipitation: None`). Units are `celsius`; a non-celsius payload is refused rather than mislabelled (spec §5.7).
 - **The app store only offers an update when `wettergraph/config.yaml` version changes** (now `0.2.1`). Any later ticket whose fix must reach the operator bumps it again.
 - **A live 403 is not reproducible on demand**: met.no accepted a bare `python-urllib` User-Agent in a probe. The app sends the descriptive UA anyway; the 403 path is verified against a fake server.
+- **HA's Generic Camera is config-flow only** (the YAML `camera: platform: generic` platform is gone) and has **no `frame_interval`**: *Frame rate* is only a floor on re-fetching an unchanged URL (`frame_interval = 1 / framerate`, default 2). The dashboard picks a new frame up about every 5 minutes because the camera access token rotates (`TOKEN_CHANGE_INTERVAL`) and that state write changes `entity_picture`. The integration sends no cache headers of its own.
+- **Inside an app container `/config` is the app's own public config folder**, not Home Assistant's (app configuration docs). The one folder HA core and an app both see is `/share`, mapped with `map: - share:rw` - where the widget's fallback file lives.
