@@ -1,5 +1,5 @@
 name: Wettergraph
-version: "0.1.2"
+version: "0.2.0"
 slug: wettergraph
 description: >-
   Renders a Wettergraph-style forecast image for one place - temperature curve,

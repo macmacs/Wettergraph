@@ -4,8 +4,12 @@ It proves the app starts, that Supervisor's options reach us at
 /data/options.json, and, since ticket 04, that the met.no data side runs: a
 daemon thread polls ``locationforecast/2.0/compact`` when ``Expires`` allows,
 caches the last good series under ``/data``, and keeps serving it when met.no
-is unreachable. The status page and ``/forecast.json`` show that state; the
-image itself is still a placeholder until the renderer ticket.
+is unreachable.
+
+Since ticket 05 the served image is the real graph: ``render.render_view``
+turns the cached series into the PNG that ``assets/graph-spec.md`` describes,
+with ``?width=`` and ``?theme=light|dark`` as the two per-request knobs. The
+intermediate SVG stays available at ``/image/graph.svg`` for debugging.
 
 The page reads its values from the options file on every request, so editing an
 option in the UI changes the page with no rebuild.
@@ -20,8 +24,10 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import metno
+import render
 
 OPTIONS_PATH = Path(os.environ.get("WG_OPTIONS", "/data/options.json"))
 DATA_DIR = Path("/data")
@@ -29,17 +35,6 @@ STARTED_AT = time.time()
 
 # Set in main() (or in --self-test mode); the request handler reads it.
 CACHE: metno.ForecastCache | None = None
-
-# Placeholder asset, replaced by the real met.no-driven render later.
-SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="782" height="391" viewBox="0 0 782 391">
-  <rect width="782" height="391" fill="{bg}"/>
-  <text x="32" y="120" font-family="DejaVu Sans, sans-serif" font-size="34" fill="#1f2d3d">{title}</text>
-  <text x="32" y="170" font-family="DejaVu Sans, sans-serif" font-size="22" fill="#3a4b5c">{place}</text>
-  <text x="32" y="212" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#6b7b8c">up {uptime}s - update_interval {interval} min - note: {note}</text>
-  <text x="32" y="256" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#6b7b8c">{layer}</text>
-  <text x="32" y="300" font-family="DejaVu Sans, sans-serif" font-size="16" fill="#9aa7b4">placeholder - no forecast data yet</text>
-</svg>
-"""
 
 
 def options() -> dict:
@@ -89,11 +84,29 @@ def reconfigure(cache: metno.ForecastCache) -> None:
     )
 
 
+def current_view() -> dict:
+    """What the renderer and the status page read, even before the data layer
+    has anything (then it is the graph-spec §8.3 no-cache case)."""
+    if CACHE is not None:
+        return CACHE.view()
+    return {
+        "place": {},
+        "samples": [],
+        "fetched_at": None,
+        "age_seconds": None,
+        "stale": False,
+        "expires_at": None,
+        "last_outcome": "data layer not started",
+        "last_error": "data layer not started",
+        "cache_path": "-",
+    }
+
+
 def data_html() -> str:
     """The data-layer line on the status page."""
     if CACHE is None:
         return "<p>forecast data: data layer not started</p>"
-    view = CACHE.view()
+    view = current_view()
     age = view["age_seconds"]
     if age is None:
         age_text = "never"
@@ -128,11 +141,15 @@ def page_html(opts: dict) -> str:
   code {{ color: #8fd6ff; }}
 </style>
 <h1>Wettergraph</h1>
-<p>Skeleton is up. Rendering is not implemented yet.</p>
+<p>Rendering is live: the image below is the cached met.no series drawn to
+<code>assets/graph-spec.md</code>. Temperature curve, weather icons, precipitation
+band; no wind. <code>?width=</code> (480-1564) and <code>?theme=dark</code> are
+per-request.</p>
 <p><code>{OPTIONS_PATH}</code> - read fresh on every request.</p>
 <table>{rows}</table>
 {data_html()}
-<img src="/image/graph" alt="placeholder graph" width="782">
+<img src="/image/graph" alt="Wettergraph forecast" width="782">
+<p><a href="/image/graph.svg">intermediate SVG</a> - <a href="/image/graph?theme=dark">dark variant</a> - <a href="/forecast.json">forecast.json</a></p>
 """
 
 
@@ -149,7 +166,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - http.server API
         opts = options()
-        path = self.path.split("?", 1)[0]
+        parsed = urlparse(self.path)
+        path = parsed.path
+        query = parse_qs(parsed.query)
 
         if path in ("/", "/index.html"):
             self._send(200, page_html(opts).encode(), "text/html; charset=utf-8", "no-store")
@@ -160,29 +179,35 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/forecast.json":
-            view = CACHE.view() if CACHE else {
-                "samples": [],
-                "last_error": "data layer not started",
-            }
             self._send(
                 200,
-                json.dumps(view, indent=2).encode(),
+                json.dumps(current_view(), indent=2).encode(),
                 "application/json; charset=utf-8",
                 "no-store",
             )
             return
 
-        if path in ("/image/graph", "/image/graph.svg"):
-            svg = SVG.format(
-                bg="#10131a",
-                title="Wettergraph",
-                place=f"place {opts.get('place_id', '?')} {opts.get('latitude', '?')},{opts.get('longitude', '?')}",
-                uptime=int(time.time() - STARTED_AT),
-                interval=opts.get("update_interval", "?"),
-                note=opts.get("page_note", "-"),
-                layer=f"python {os.sys.version.split()[0]} / /data writable: {os.access(DATA_DIR, os.W_OK)}",
+        # The published artifact is the PNG (graph-spec §1.5). width and theme
+        # are clamped/validated inside the renderer (§1.2, §2.2).
+        if path in ("/image/graph", "/image/graph.png"):
+            png = render.render_view(
+                current_view(),
+                width=query.get("width", [""])[0],
+                theme=query.get("theme", [""])[0],
+                now=time.time(),
             )
-            self._send(200, svg.encode(), "image/svg+xml; charset=utf-8", "no-store")
+            self._send(200, png, "image/png", "no-store")
+            return
+
+        # The intermediate SVG stays inside the app: same box, debug route.
+        if path == "/image/graph.svg":
+            svg = render.build_view_svg(
+                current_view(),
+                width=query.get("width", [""])[0],
+                theme=query.get("theme", [""])[0],
+                now=time.time(),
+            )
+            self._send(200, svg.encode("utf-8"), "image/svg+xml; charset=utf-8", "no-store")
             return
 
         self._send(404, b"not found\n", "text/plain; charset=utf-8", "no-store")
@@ -207,22 +232,24 @@ def run_checks(bind_port: int = 0) -> list[tuple[str, bool, str]]:
     base = f"http://127.0.0.1:{port}"
 
     def fetch(path: str):
+        """(status, content-type, body bytes); never raises."""
         try:
-            with urllib.request.urlopen(base + path, timeout=10) as resp:
-                return resp.status, resp.headers.get("Content-Type", ""), resp.read().decode()
+            with urllib.request.urlopen(base + path, timeout=20) as resp:
+                return resp.status, resp.headers.get("Content-Type", ""), resp.read()
         except urllib.error.HTTPError as exc:
-            return exc.code, exc.headers.get("Content-Type", ""), exc.read().decode()
+            return exc.code, exc.headers.get("Content-Type", ""), exc.read()
         except OSError as exc:
-            return 0, "", f"unreachable: {exc}"
+            return 0, "", f"unreachable: {exc}".encode()
 
     opts = options()
     checks: list[tuple[str, bool, str]] = []
 
     status, _, body = fetch("/health")
-    checks.append(("/health returns 200 ok", status == 200 and body.strip() == "ok", f"{status} {body.strip()[:40]!r}"))
+    checks.append(("/health returns 200 ok", status == 200 and body.strip() == b"ok", f"{status} {body[:40]!r}"))
 
     status, ctype, body = fetch("/")
-    rows = body.count("<tr>")
+    page = body.decode(errors="replace")
+    rows = page.count("<tr>")
     checks.append(("/ serves an HTML page", status == 200 and "text/html" in ctype, f"{status} {ctype}"))
     checks.append(
         (
@@ -233,16 +260,50 @@ def run_checks(bind_port: int = 0) -> list[tuple[str, bool, str]]:
     )
     if opts and "_error" not in opts:
         key, value = sorted(opts.items())[0]
-        checks.append(("option values reach the page", str(value) in body, f"{key}={value!r}"))
+        checks.append(("option values reach the page", str(value) in page, f"{key}={value!r}"))
 
     status, ctype, body = fetch("/image/graph")
+    width = int.from_bytes(body[16:20], "big") if len(body) >= 24 else 0
+    height = int.from_bytes(body[20:24], "big") if len(body) >= 24 else 0
     checks.append(
         (
-            "/image/graph serves an SVG",
-            status == 200 and "svg" in ctype and body.startswith("<svg") and 'width="782"' in body,
-            f"{status} {ctype} {len(body)}B",
+            "/image/graph serves a 782x391 PNG",
+            status == 200 and "png" in ctype and body[:8] == b"\x89PNG\r\n\x1a\n" and (width, height) == (782, 391),
+            f"{status} {ctype} {len(body)}B {width}x{height}",
         )
     )
+
+    status, ctype, body = fetch("/image/graph?width=480&theme=dark")
+    width = int.from_bytes(body[16:20], "big") if len(body) >= 24 else 0
+    checks.append(
+        (
+            "/image/graph honours ?width (clamped) and ?theme",
+            status == 200 and width == 480,
+            f"{status} {width}px",
+        )
+    )
+
+    status, ctype, body = fetch("/image/graph.svg")
+    svg = body.decode(errors="replace")
+    checks.append(
+        (
+            "/image/graph.svg serves the intermediate SVG, no wind",
+            status == 200 and "svg" in ctype and svg.startswith("<svg") and "wind" not in svg.lower(),
+            f"{status} {ctype} {len(svg)}B",
+        )
+    )
+    checks.append(("render font is readable (graph-spec §3.4)", render.FONT_PATH.is_file(), str(render.FONT_PATH)))
+
+    try:
+        now = time.time()
+        fixture = render.fixture_samples(now)
+        fixture_svg = render.build_svg(fixture, fetched_at=now, now=now)
+        icons_drawn = fixture_svg.count("<g transform")
+        ok = 'stroke="#d81e05"' in fixture_svg and " mm/h" in fixture_svg and icons_drawn == 16
+        detail = f"{len(fixture_svg)}B SVG, {icons_drawn} icons"
+    except Exception as exc:  # noqa: BLE001 - a broken renderer must be reported, not fatal
+        ok, detail = False, f"renderer raised {exc!r}"
+    checks.append(("renderer draws the curve, 16 icons and the band (fixture)", ok, detail))
 
     status, _, _ = fetch("/definitely-not-a-route")
     checks.append(("unknown paths 404", status == 404, str(status)))
@@ -298,6 +359,14 @@ def main() -> None:
     )
     CACHE = cache_for(options())
     print(f"wettergraph: met.no UA={metno.USER_AGENT!r} cache={CACHE.cache_path()}", flush=True)
+    if render.FONT_PATH.is_file():
+        print(f"wettergraph: render font {render.FONT_PATH} present, icons {render.ICONS_DIR}", flush=True)
+    else:
+        print(
+            f"wettergraph: ERROR render font {render.FONT_PATH} is not readable; "
+            "resvg draws no text at all (graph-spec §3.4)",
+            flush=True,
+        )
     stop = threading.Event()
     threading.Thread(
         target=CACHE.run_forever,
