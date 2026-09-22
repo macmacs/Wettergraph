@@ -152,7 +152,7 @@ all the frame plus `noch keine Daten` and the last error.
   the PNG is the published artifact.
 - Samples: `assets/render-sample-light.png`, `render-sample-dark.png`,
   `render-sample-dry-stale.png`, rendered from the committed snapshot
-  `assets/render-sample-cache.json`. `tools/render-check.py` proves all 56
+  `assets/render-sample-cache.json`. `tools/render-check.py` proves all 57
   clause checks, including geometry parity against
   `assets/graph-reference.svg`.
 
