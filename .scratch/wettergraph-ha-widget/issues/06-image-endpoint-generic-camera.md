@@ -1,7 +1,7 @@
 # Auto-updating image endpoint and generic camera
 
 Type: task
-Status: open
+Status: claimed
 Blocked by: 05
 
 ## Question
