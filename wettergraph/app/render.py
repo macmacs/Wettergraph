@@ -12,6 +12,11 @@ Input is the normalised series from :mod:`metno` - ``ForecastCache.view()``:
 matches ``assets/graph-spec.md`` clause for clause; the clause numbers are cited
 at each decision below.
 
+``show_age=True`` (ticket 06) draws the §8.2 age chip even when the data is
+fresh, with minutes instead of hours under one hour. It is a debug switch -
+§9.4 keeps the clock off the image otherwise - so a dashboard can be watched
+proving it refreshes on its own.
+
 Local check (needs the font file; this dev box has no fonts in the usual path)::
 
     uv run --with resvg-py python wettergraph/app/render.py \
@@ -306,6 +311,18 @@ def stale_label(age_seconds) -> str:
     return f"vor {days} Tagen"
 
 
+def age_label(age_seconds) -> str:
+    """The same chip while the data is fresh: §8.2's wording, minutes first.
+
+    Only reached with ``show_age=True``; a fresh graph is drawn without any
+    chip by default.
+    """
+    age = max(0.0, float(age_seconds or 0.0))
+    if age < 3600:
+        return f"vor {int(age // 60)} min"
+    return stale_label(age)
+
+
 # --------------------------------------------------------------------- svg
 
 
@@ -330,6 +347,7 @@ def build_svg(
     width: int = DEFAULT_WIDTH,
     theme: str = "light",
     icons_dir: Path | str | None = None,
+    show_age: bool = False,
 ) -> str:
     """The whole image as one SVG. Deterministic for the same arguments."""
     width = clamp_width(width)
@@ -496,10 +514,11 @@ def build_svg(
         text(x, WEEKDAY_BASELINE, weekday, size=WEEKDAY_FONT, colour=palette["text"], anchor="middle")
 
     # §8.2 stale marker, drawn over whatever is under it (§8.4: nothing moves).
-    if stale:
-        age = age_seconds
-        if age is None and fetched_at is not None and now is not None:
-            age = max(0.0, float(now) - float(fetched_at))
+    # show_age forces the same chip on fresh data (ticket 06's debug switch).
+    age = age_seconds
+    if age is None and fetched_at is not None and now is not None:
+        age = max(0.0, float(now) - float(fetched_at))
+    if (stale or show_age) and age is not None:
         body.append(
             f'<rect x="{_n(_px(CHIP_X, k))}" y="{_n(_px(CHIP_Y, k))}"'
             f' width="{_n(_px(CHIP_WIDTH, k))}" height="{_n(_px(CHIP_HEIGHT, k))}"'
@@ -509,7 +528,13 @@ def build_svg(
             f'<circle cx="{_n(_px(DOT_X, k))}" cy="{_n(_px(DOT_Y, k))}"'
             f' r="{_n(_px(DOT_RADIUS, k))}" fill="{palette["stale"]}"/>'
         )
-        text(CHIP_TEXT_X, CHIP_TEXT_Y, stale_label(age), size=AXIS_FONT, colour=palette["stale"])
+        text(
+            CHIP_TEXT_X,
+            CHIP_TEXT_Y,
+            stale_label(age) if stale else age_label(age),
+            size=AXIS_FONT,
+            colour=palette["stale"],
+        )
 
     return _document(width, height, body)
 
@@ -550,7 +575,7 @@ def render_png(samples, *, font_path: Path | str | None = None, **kwargs) -> byt
     return _rasterise(build_svg(samples, **kwargs), width, font_path)
 
 
-def _view_arguments(view: dict, *, width, theme, now, icons_dir) -> dict:
+def _view_arguments(view: dict, *, width, theme, now, icons_dir, show_age=False) -> dict:
     view = view or {}
     return dict(
         samples=view.get("samples") or [],
@@ -562,17 +587,26 @@ def _view_arguments(view: dict, *, width, theme, now, icons_dir) -> dict:
         width=width,
         theme=theme,
         icons_dir=icons_dir,
+        show_age=show_age,
     )
 
 
-def build_view_svg(view: dict, *, width=DEFAULT_WIDTH, theme="light", now=None, icons_dir=None) -> str:
+def build_view_svg(
+    view: dict, *, width=DEFAULT_WIDTH, theme="light", now=None, icons_dir=None, show_age=False
+) -> str:
     """The view from :meth:`metno.ForecastCache.view`, as SVG text."""
-    return build_svg(**_view_arguments(view, width=width, theme=theme, now=now, icons_dir=icons_dir))
+    return build_svg(
+        **_view_arguments(view, width=width, theme=theme, now=now, icons_dir=icons_dir, show_age=show_age)
+    )
 
 
-def render_view(view: dict, *, width=DEFAULT_WIDTH, theme="light", now=None, icons_dir=None, font_path=None) -> bytes:
+def render_view(
+    view: dict, *, width=DEFAULT_WIDTH, theme="light", now=None, icons_dir=None, font_path=None, show_age=False
+) -> bytes:
     """The view from :meth:`metno.ForecastCache.view`, as a PNG."""
-    arguments = _view_arguments(view, width=width, theme=theme, now=now, icons_dir=icons_dir)
+    arguments = _view_arguments(
+        view, width=width, theme=theme, now=now, icons_dir=icons_dir, show_age=show_age
+    )
     return render_png(font_path=font_path, **arguments)
 
 
