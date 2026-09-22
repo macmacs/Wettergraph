@@ -614,7 +614,6 @@ def _cli(argv: list[str] | None = None) -> int:
     parser.add_argument("--icons", default=str(ICONS_DIR))
     arguments = parser.parse_args(argv)
 
-    last_error = None
     if arguments.cache:
         document = json.loads(Path(arguments.cache).read_text())
         samples = document.get("samples") or []
@@ -622,8 +621,7 @@ def _cli(argv: list[str] | None = None) -> int:
     else:
         fetched_at = arguments.now if arguments.now is not None else time.time()
         samples = fixture_samples(fetched_at, dry=arguments.dry)
-        if not samples:
-            last_error = "fixture empty"
+    last_error = None
 
     age_seconds = arguments.age_hours * 3600 if arguments.age_hours is not None else None
     png = render_png(

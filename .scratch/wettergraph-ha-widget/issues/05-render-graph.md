@@ -88,8 +88,11 @@ element-for-element; the two images were also compared by eye.
 the container ran plain `/usr/bin/python3`, so the Dockerfile now installs
 `font-dejavu` (spec §3.4) and runs `uv sync --frozen` from the committed
 `wettergraph/app/uv.lock` into `/app/.venv`; `CMD` is now
-`/app/.venv/bin/python`. musllinux wheels exist for both target arches, so no
-compiler enters the image.
+`/app/.venv/bin/python`. The lock was checked against the container's own uv
+(0.11.19, the Alpine community build): it syncs from it, and for a musl target
+with Python 3.14 it resolves
+`resvg_py-0.5.0-cp310-abi3-musllinux_1_2_x86_64.whl` (the aarch64 wheel exists
+too), so no compiler enters the image.
 
 **Evidence on this box** (no container can be built here - see map "Verified
 facts"):
@@ -100,6 +103,10 @@ facts"):
   committed PNG re-rendered to its committed hash.
 - One render at 782 px with 16 icons: ~70 ms; SVG 44-68 KB depending on the icon mix.
 - `tools/addon-lint.py` -> loadable, `v0.2.0`.
+- `uvx uv@0.11.19 sync --frozen` -> installs resvg-py from the committed lock
+  (the container's uv version), and the musl resolution is the musllinux
+  cp310-abi3 wheel for both arches - the one build step that cannot be run here
+  is proven as far as it can be without Docker.
 
 **Version.** `wettergraph/config.yaml` 0.1.2 -> 0.2.0 (and the `metno.py`
 fallback UA) so the store offers the update.
