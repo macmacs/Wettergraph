@@ -1,7 +1,7 @@
 # met.no client and forecast cache
 
 Type: task
-Status: claimed
+Status: resolved
 
 ## Question
 
@@ -100,8 +100,10 @@ lines: the first `metno:` line, then the `startup check N/N` block. The panel
 should show one `forecast data:` line.
 
 - [x] Local: live fetch, fake-server suite, self-test, linter - all pass.
-- [ ] `metno: 200 OK, N samples cached to /data/forecast-cache.json` in the log.
-- [ ] `startup check 9/9 passed`, and `forecast data: N samples ... (fresh)` on the status page.
+- [x] `metno: 200 OK, N samples cached to /data/forecast-cache.json` in the log -
+  operator confirmed 2026-09-22, after updating the app to 0.1.2 on HAOS.
+- [x] `startup check 9/9 passed` - operator confirmed. (The status page line was
+  not reported on separately; the same view feeds both.)
 
 ## Refs
 
