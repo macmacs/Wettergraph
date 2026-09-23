@@ -1,5 +1,5 @@
 name: Wettergraph
-version: "0.3.1"
+version: "0.4.0"
 slug: wettergraph
 description: >-
   Renders a Wettergraph-style forecast image for one place - temperature curve,
@@ -11,13 +11,23 @@ arch:
   - amd64
 startup: application
 boot: auto
-# The fallback route of ticket 06: when the HA instance cannot reach this app's
-# port, HA still reads a file, so the graph is also written to
-# /share/wettergraph/graph.png for the Local file camera. Inside an app
-# container /config is the app's *own* public config folder, not Home
-# Assistant's, hence /share.
+# Two mapped folders, two delivery routes.
+#
+# share (ticket 06) is the camera fallback: when the HA instance cannot reach
+# this app's port, HA still reads a file, so the graph is also written to
+# /share/wettergraph/graph.png for the Local file camera.
+#
+# homeassistant_config (ticket 07) is the *dashboard* route, and it is not
+# optional: a browser-loaded card cannot use port 8099 at all, because the
+# dashboard is HTTPS and the port is HTTP, so the image is blocked as mixed
+# content. HA serves its own config dir's `www` folder at /local/, so the SVGs
+# go to www/wettergraph/graph-{light,dark}.svg and the card reads a same-origin
+# URL that never rotates. Note the mount point: Supervisor mounts every map
+# type at /<type-name>, so HA's config dir is /homeassistant - /config inside
+# an app container is the app's *own* public config folder, not HA's.
 map:
   - share:rw
+  - homeassistant_config:rw
 # The base image brings its own init (s6-overlay) and refuses to run unless it
 # is PID 1. Supervisor's `init` key defaults to true, which hands the container
 # to Docker's tini as PID 1 instead, and s6 then dies with

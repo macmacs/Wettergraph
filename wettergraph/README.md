@@ -4,10 +4,12 @@ The widget. It starts, polls met.no's `locationforecast/2.0/compact` on the
 schedule met.no itself asks for, caches the last good forecast under `/data`,
 and serves a status page, the normalised forecast as JSON, and the graph itself
 as a PNG: temperature curve, weather icons, precipitation band, no wind
-anywhere. Home Assistant's own Generic Camera polls that PNG for a dashboard
-card, and a copy of it is kept in `/share` for the case where the HA instance
-cannot reach the app's port. See the map in
-`.scratch/wettergraph-ha-widget/map.md`.
+anywhere. The dashboard card reads the graph as an **SVG on the HA origin**,
+`/local/wettergraph/graph-{light,dark}.svg`, because a browser-loaded card
+cannot fetch the app's own HTTP port from an HTTPS dashboard. The Generic
+Camera polling the PNG and the `/share` copy both stay as the camera routes.
+See the maps in `.scratch/wettergraph-ha-widget/map.md` and
+`.scratch/wettergraph-redesign/map.md`.
 
 ## Install
 
@@ -20,9 +22,11 @@ Home Assistant OS only (native container installs have no app store).
 3. Reload the store page if needed, then install **Wettergraph**.
 4. **Start** it and open the **Log** tab. First lines:
 
-   `wettergraph: starting on :8099; options=/data/options.json present=True build=0.3.1`
-   `wettergraph: met.no UA='Wettergraph/0.3.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph)' cache=/data/forecast-cache.json`
+   `wettergraph: starting on :8099; options=/data/options.json present=True build=0.4.0`
+   `wettergraph: met.no UA='Wettergraph/0.4.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph)' cache=/data/forecast-cache.json`
    `wettergraph: share target /share/wettergraph/graph.png`
+   `wettergraph: www target /homeassistant/www/wettergraph/graph-light.svg -> /local/wettergraph/graph-light.svg`
+   `wettergraph: www target /homeassistant/www/wettergraph/graph-dark.svg -> /local/wettergraph/graph-dark.svg`
    `wettergraph: render font /usr/share/fonts/dejavu/DejaVuSans.ttf present, icons /app/icons`
 
    Then the poller's first line - `metno: 200 OK, 88 samples cached to
@@ -45,11 +49,13 @@ Home Assistant OS only (native container installs have no app store).
    wettergraph: PASS  renderer draws the curve, 16 icons and the band (fixture)  (43601B SVG, 16 icons)
    wettergraph: PASS  ?age=1 draws the age chip (the card's only moving pixel)  (chip reads 'vor 5 min' 5 min after the fetch)
    wettergraph: PASS  the fallback copy is in step (/share/wettergraph/graph.png)  (24875B on disk, 24875B served, 0 write(s) this run)
+   wettergraph: PASS  the light dashboard SVG is in step (/local/wettergraph/graph-light.svg)  (36769B on disk, 36769B rendered, 0 write(s) this run)
+   wettergraph: PASS  the dark dashboard SVG is in step (/local/wettergraph/graph-dark.svg)  (36774B on disk, 36774B rendered, 0 write(s) this run)
    wettergraph: PASS  unknown paths 404  (404)
    wettergraph: PASS  options file is readable  (/data/options.json)
    wettergraph: PASS  /forecast.json serves the normalised series  (200 88 samples)
-   wettergraph: PASS  met.no User-Agent is descriptive  (Wettergraph/0.3.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph))
-   wettergraph: startup check 17/17 passed
+   wettergraph: PASS  met.no User-Agent is descriptive  (Wettergraph/0.4.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph))
+   wettergraph: startup check 19/19 passed
    ```
 
    The byte counts and the sample count are yours; the paths and the check
@@ -57,6 +63,14 @@ Home Assistant OS only (native container installs have no app store).
    `/share` is not mapped into the container (or is not writable) - the
    dashboard path does not use it, but the Local file camera fallback (see
    **The dashboard**) then has nothing to read.
+
+   `the light/dark dashboard SVG is in step` FAILing with `/homeassistant is
+   not mapped into this app` means `homeassistant_config:rw` has not reached
+   the container: update the app (Supervisor recreates the container with the
+   new mapping) or, failing that, uninstall and reinstall. The app deliberately
+   does **not** create `/homeassistant` itself - it would then be writing into
+   a folder only the container can see, and everything would look fine while
+   Home Assistant served nothing.
 
    `render font is readable` FAILing means the image will render with every
    text node missing (resvg draws nothing when no font answers) - report it.
@@ -89,7 +103,7 @@ fetches `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=&lon=`
 writes it to `/data/forecast-cache.json`.
 
 - **User-Agent**, required by met.no:
-  `Wettergraph/0.3.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph)`
+  `Wettergraph/0.4.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph)`
   (`BUILD_VERSION`, so a version bump changes it).
 - **Polling follows met.no's `Expires` header**: the next request is not sent
   before it. Once it has passed, the request carries `If-Modified-Since`, and a
@@ -114,7 +128,8 @@ Where to look:
   `age_seconds`, `stale`, `last_error`, `expires_at`, `cache_path`
 - log - one `metno:` line per poll, roughly every 30-60 min, `304 Not Modified`
   when the model has not changed
-- log - one `share wrote ...` line each time the `/share` copy changes (so
+- log - one `share wrote ...` / `www light wrote ...` line each time a
+  published file changes (so
   after startup and after each new forecast)
 
 The series shape the renderer consumes, one entry per met.no timeseries entry:
@@ -176,12 +191,60 @@ all the frame plus `noch keine Daten` and the last error.
   clause checks, including geometry parity against
   `assets/graph-reference.svg`.
 
-## The dashboard (ticket 06)
+## The dashboard (ticket 07)
 
-The card is Home Assistant's own **Generic Camera**: no HACS, no custom card,
-nothing to keep updated. It fetches `http://<ha-host>:8099/image/graph`, and HA
-re-reads that image on its own schedule, so the graph stays current with nobody
-touching the dashboard.
+**The card cannot use port 8099.** The dashboard is served over HTTPS and the
+app's port is HTTP, so a browser blocks the image as mixed content - PNG or
+SVG, it never arrives. (Typing the URL into a tab works: that is a top-level
+navigation, which the rule does not cover.) The Generic Camera below is
+unaffected only because *HA* fetches it server-side and re-serves it on the HA
+origin.
+
+So the app writes both themes into Home Assistant's own `www` folder, which HA
+serves at `/local/`:
+
+    /homeassistant/www/wettergraph/graph-light.svg   ->  /local/wettergraph/graph-light.svg
+    /homeassistant/www/wettergraph/graph-dark.svg    ->  /local/wettergraph/graph-dark.svg
+
+`map: - homeassistant_config:rw` in `config.yaml` is what makes that folder
+writable. Note the mount point: Supervisor mounts every map type at
+`/<type-name>`, so HA's config dir is `/homeassistant`. `/config` inside an app
+container is the app's *own* public config folder, not HA's.
+
+The card is HACS's `custom:refreshable-picture-card`:
+
+    type: custom:refreshable-picture-card
+    refresh_interval: 600
+    url: /local/wettergraph/graph-light.svg
+    attribute: ''
+    noMargin: true
+    tap_action:
+      action: more-info
+    grid_options:
+      rows: auto
+      columns: 18
+
+`rows: auto` lets the SVG scale to its tile. The card appends its own
+`?currentTimeCache=<ms>` on every refresh, which is what beats HA's 31-day
+`Cache-Control` on `/local/`; the app does not need to version the URL. Wrap
+two of these in a `conditional` on `sun.sun` to swap light for dark.
+
+Two things to know about that folder:
+
+- **An SVG in `<img>` loads no external CSS**, so the *browser* picks the font,
+  not the renderer's pinned DejaVu. Every text node names
+  `DejaVu Sans, Verdana, sans-serif` (`render.FONT_STACK`) for that reason;
+  resvg stops at the first name, so the PNG is unaffected.
+- **If `www` did not exist before**, Home Assistant registers `/local/` at
+  startup and will 404 until it is restarted once. The app log says so when it
+  creates the folder.
+
+### The camera routes (ticket 06)
+
+Home Assistant's own **Generic Camera**: no HACS, no custom card, nothing to
+keep updated. It fetches `http://<ha-host>:8099/image/graph`, and HA re-reads
+that image on its own schedule. Still the route for a **Picture entity** card
+or anything that wants a `camera.` entity.
 
 1. Settings -> Devices & services -> **Add integration** -> **Generic Camera**.
 2. **Still Image URL**: `http://<ha-host>:8099/image/graph?width=782&theme=light`
@@ -223,7 +286,7 @@ Without the switch the image carries no clock at all (§9.4).
 - `http://<ha-host>:8099/` shows the URL to paste, the cadence it is running
   with, and the state of the `/share` copy.
 
-**Fallback: when Home Assistant cannot reach port 8099.** Some installs (port
+**Fallback: when Home Assistant cannot reach port 8099 either.** Some installs (port
 conflict, firewall, HA in its own Docker network) cannot dial the app. HA can
 still read a file, so the app writes the same PNG - same options, same render -
 to:
@@ -234,9 +297,7 @@ to:
 is rewritten only when the picture actually changes, so a quiet hour costs one
 render a minute and no disk writes. To use it, add a **Local file** camera
 (same *Add integration* dialog) with that path as its *File path*. HA core reads
-the file directly, so no port, no HTTP, and nothing to reach. `/config` is *not*
-usable for this: inside an app container `/config` is the app's own public
-config folder, not Home Assistant's.
+the file directly, so no port, no HTTP, and nothing to reach.
 
 The file copy carries no age chip: `&age=1` is a URL switch and a file has no
 URL. Its freshness is the `shared copy: ... written 4 min ago` line on the
@@ -290,11 +351,16 @@ it - no rebuild, nothing to reinstall.
     uv run --project wettergraph/app python wettergraph/app/render.py --cache /tmp/wg/forecast-cache.json --out /tmp/sample.png
 
     # the whole app; needs an options file, and WG_FONT on a box with no DejaVu
-    # at the container's path, WG_SHARE where there is no /share (this dev box
-    # has neither)
-    WG_OPTIONS=/tmp/options.json WG_FONT=/tmp/DejaVuSans.ttf WG_DATA=/tmp/wg WG_SHARE=/tmp/wg/share \
+    # at the container's path, WG_SHARE/WG_WWW where there is no /share or
+    # /homeassistant (this dev box has none of them). WG_WWW's *parent* has to
+    # exist: an absent mount is how the app knows it is not mapped, and it
+    # refuses to write rather than fill a folder only the container can see.
+    mkdir -p /tmp/wg/share /tmp/wg/homeassistant
+    WG_OPTIONS=/tmp/options.json WG_FONT=/tmp/DejaVuSans.ttf WG_DATA=/tmp/wg \
+    WG_SHARE=/tmp/wg/share WG_WWW=/tmp/wg/homeassistant/www \
       uv run --project wettergraph/app python wettergraph/app/server.py --self-test
-    WG_OPTIONS=/tmp/options.json WG_FONT=/tmp/DejaVuSans.ttf WG_DATA=/tmp/wg WG_SHARE=/tmp/wg/share \
+    WG_OPTIONS=/tmp/options.json WG_FONT=/tmp/DejaVuSans.ttf WG_DATA=/tmp/wg \
+    WG_SHARE=/tmp/wg/share WG_WWW=/tmp/wg/homeassistant/www \
       uv run --project wettergraph/app python wettergraph/app/server.py   # then http://localhost:8099/
 
     python3 wettergraph/app/metno.py --cache-dir /tmp/wg --once   # one real fetch
