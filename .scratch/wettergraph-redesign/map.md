@@ -42,6 +42,12 @@ Open tickets are not listed here - they are the files in `issues/`, found by sca
 - [Does the graph survive as an SVG in the operator's card?](issues/00-svg-delivery-probe.md)
 - [Wind-stripped layout reference](issues/01-layout-reference.md)
 - [yr's dark meteogram palette](issues/02-yr-dark-palette.md)
+- [Rewrite the graph visual specification](issues/03-rewrite-spec.md)
+- [Width range for the new layout](issues/04-width-range.md)
+- [Redraw the renderer to the new spec](issues/05-redraw-renderer.md)
+- [Ship the new look and confirm it on the dashboard](issues/06-ship-and-confirm.md)
+- [Publish the graph as an SVG Home Assistant can serve](issues/07-local-svg-publish.md)
+
 ## Decisions so far
 
 <!-- one line per closed ticket: gist + link to where the detail lives -->
@@ -88,6 +94,8 @@ Open tickets are not listed here - they are the files in `issues/`, found by sca
   ```
 
 - **The phone's text.** Ticket 00's legibility verdict is desktop only; a phone browser substitutes a different font again. Carried into [ticket 06](issues/06-ship-and-confirm.md) as a check, not yet a question of its own.
+
+- **How the fitted °C band reads.** The ladder of §5.1 puts the band bottom at `floor(t_min/r)*r`, so a flat window can leave the curve hugging the plot's bottom line, and the band's step changes between renders as the forecast moves. Whether that looks right - or wants a minimum bottom margin, or a stickier step - is not answerable until the operator has seen a few days of real renders ([ticket 06](issues/06-ship-and-confirm.md)).
 
 - **The "now" edge.** The original graph starts at a whole even hour; ours starts at the current hour. Whether the first column needs any marker at all is a question for after the first render.
 
