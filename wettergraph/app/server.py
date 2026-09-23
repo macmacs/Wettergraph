@@ -19,6 +19,12 @@ polls on the app's own port, ``update_interval``, ``image_width`` and
 ``image_theme`` decide what is served, the response is explicitly uncacheable,
 and a copy is kept in ``/share`` for the case where the HA instance cannot
 reach the port.
+
+Ticket 07 is the *dashboard* route, because a browser-loaded card cannot use
+the port at all: the dashboard is HTTPS, the port is HTTP, and the image is
+blocked as mixed content. So both themes are also written into HA's own ``www``
+folder and served by HA at ``/local/wettergraph/graph-light.svg`` and
+``graph-dark.svg`` - same origin, no rotating token, scalable in its tile.
 """
 
 from __future__ import annotations
@@ -50,6 +56,22 @@ NO_CACHE = "no-store, no-cache, must-revalidate, max-age=0"
 CACHE: metno.ForecastCache | None = None
 # The /share copy of the served image (the fallback route, see publish.py).
 PUBLISHER = publish.Publisher()
+# Ticket 07: the dashboard's own artifact, on the HA origin under /local/. Both
+# themes are written unconditionally, so a card can switch on sun.sun without
+# the app's `image_theme` option having anything to say about it.
+WWW = {
+    theme: publish.Publisher(
+        publish.DEFAULT_WWW_DIR,
+        filename=f"graph-{theme}.svg",
+        label=f"www {theme}",
+        # `www` itself may not exist on a fresh HA and is ours to create; the
+        # mount above it is Supervisor's, and its absence means "not mapped".
+        mount=publish.DEFAULT_WWW_DIR.parent,
+    )
+    for theme in ("light", "dark")
+}
+# What HA serves the files above as; `www` is HA's config dir, `/local/` the URL.
+WWW_URL_BASE = f"/local/{publish.SUBDIR}"
 
 
 def options() -> dict:
@@ -121,6 +143,21 @@ def default_png(now: float | None = None) -> bytes:
     )
 
 
+def theme_svg(theme: str, now: float | None = None) -> bytes:
+    """The SVG ticket 07 publishes for one theme: options for width, no age chip.
+
+    The chip is off for the same reason it is off the /share PNG - it moves
+    every minute and would rewrite the file every minute with it. Width still
+    follows ``image_width`` because it sets the SVG's intrinsic size, which is
+    what a card with ``rows: auto`` scales *from*.
+    """
+    width, _ = image_options(options())
+    svg = render.build_view_svg(
+        current_view(), width=width, theme=theme, now=now or time.time()
+    )
+    return svg.encode("utf-8")
+
+
 def flag(query: dict, name: str) -> bool:
     """?age, ?age=1, ?age=true, ?age=yes... all switch a debug option on."""
     values = query.get(name)
@@ -171,8 +208,35 @@ def data_html() -> str:
     )
 
 
+def www_html() -> str:
+    """Ticket 07: the state of the two /local/ SVGs, and the card that reads them."""
+    lines = []
+    for theme, pub in WWW.items():
+        state = pub.status()
+        if state["last_error"]:
+            lines.append(
+                f"<p>{theme} SVG: <code>{html.escape(state['path'])}</code> - "
+                f"<b>not writable</b>: <code>{html.escape(state['last_error'])}</code>. "
+                f"The app needs <code>map: - homeassistant_config:rw</code>; if it has it, "
+                f"update to this version so Supervisor recreates the container with the "
+                f"mapping.</p>"
+            )
+        elif state["exists"]:
+            lines.append(
+                f"<p>{theme} SVG: <code>{html.escape(state['path'])}</code> - "
+                f"{state['bytes']} B, written {age_text(state['age_seconds'])} ago "
+                f"({state['writes']} write(s) since this start), served by HA at "
+                f"<code>{WWW_URL_BASE}/graph-{theme}.svg</code>.</p>"
+            )
+        else:
+            lines.append(
+                f"<p>{theme} SVG: <code>{html.escape(state['path'])}</code> - not on disk yet.</p>"
+            )
+    return "".join(lines)
+
+
 def dashboard_html(host: str | None, opts: dict) -> str:
-    """The copy-paste block for HA's Generic Camera, plus the fallback route.
+    """The copy-paste block for the dashboard card, plus the camera routes.
 
     ``host`` is this request's Host header, so a page opened straight on the
     app's own port can print the exact URL to paste. Behind HA ingress the host
@@ -216,6 +280,26 @@ def dashboard_html(host: str | None, opts: dict) -> str:
     else:
         share_line = f"<p>shared copy: <code>{html.escape(share['path'])}</code> - not on disk yet.</p>"
     return f"""<h2>Dashboard: the card that keeps itself current</h2>
+<p>Home Assistant serves its own <code>www</code> folder at <code>/local/</code>, and this
+app writes both themes there, so the card reads a <b>same-origin, non-rotating</b>
+URL. This is the route to use: the app's own port is HTTP, the dashboard is
+HTTPS, and a browser blocks that image as mixed content whatever it contains.</p>
+<pre>type: custom:refreshable-picture-card
+refresh_interval: 600
+url: {WWW_URL_BASE}/graph-light.svg
+attribute: ''
+noMargin: true
+tap_action:
+  action: more-info
+grid_options:
+  rows: auto
+  columns: 18</pre>
+<p>The card appends its own <code>?currentTimeCache=</code> on every refresh, which is
+what beats HA's 31-day cache header on <code>/local/</code>; no version query of ours is
+needed. Wrap two of these in a <code>conditional</code> on <code>sun.sun</code> to swap
+<code>graph-light.svg</code> for <code>graph-dark.svg</code> after dark.</p>
+{www_html()}
+<h3>The camera routes (unchanged)</h3>
 <p>Settings -&gt; Devices &amp; services -&gt; <b>Add integration</b> -&gt; <b>Generic Camera</b>.
 Leave <i>Stream Source</i> empty, paste this into <i>Still Image URL</i>, and confirm
 the preview:</p>
@@ -427,7 +511,10 @@ def run_checks(bind_port: int = 0) -> list[tuple[str, bool, str]]:
     checks.append(
         (
             "the page carries the Generic Camera URL and the file fallback",
-            "Generic Camera" in page and "image/graph?width=" in page and "Local file" in page,
+            "Generic Camera" in page
+            and "image/graph?width=" in page
+            and "Local file" in page
+            and f"{WWW_URL_BASE}/graph-light.svg" in page,
             f"{len(page)}B page",
         )
     )
@@ -519,6 +606,25 @@ def run_checks(bind_port: int = 0) -> list[tuple[str, bool, str]]:
         )
     )
 
+    # Ticket 07: the dashboard reads these two, so "in step" is the whole point.
+    for theme, pub in WWW.items():
+        wanted = theme_svg(theme)
+        pub.publish(wanted)
+        state = pub.status()
+        try:
+            on_disk = Path(state["path"]).read_bytes()
+        except OSError:
+            on_disk = b""
+        checks.append(
+            (
+                f"the {theme} dashboard SVG is in step ({WWW_URL_BASE}/graph-{theme}.svg)",
+                on_disk == wanted,
+                f"{len(on_disk)}B on disk, {len(wanted)}B rendered, "
+                f"{state['writes']} write(s) this run"
+                + (f", {state['last_error']}" if state["last_error"] else ""),
+            )
+        )
+
     status, _, _ = fetch("/definitely-not-a-route")
     checks.append(("unknown paths 404", status == 404, str(status)))
     checks.append(("options file is readable", OPTIONS_PATH.exists(), str(OPTIONS_PATH)))
@@ -573,10 +679,25 @@ def main() -> None:
     )
     CACHE = cache_for(options())
     print(f"wettergraph: met.no UA={metno.USER_AGENT!r} cache={CACHE.cache_path()}", flush=True)
-    # The fallback file exists before anyone asks for it, so a Local file camera
-    # added later has something to show (publish.py).
+    # Every file exists before anyone asks for it, so a Local file camera or a
+    # /local/ card added later has something to show (publish.py).
     print(f"wettergraph: share target {PUBLISHER.path}", flush=True)
     PUBLISHER.publish(default_png())
+    for theme, pub in WWW.items():
+        print(f"wettergraph: www target {pub.path} -> {WWW_URL_BASE}/graph-{theme}.svg", flush=True)
+        pub.publish(theme_svg(theme))
+    if not publish.DEFAULT_WWW_DIR.parent.is_dir():
+        print(
+            f"wettergraph: WARNING {publish.DEFAULT_WWW_DIR.parent} is not mapped, so the "
+            "dashboard SVGs cannot be written; add `homeassistant_config:rw` and update",
+            flush=True,
+        )
+    elif not publish.DEFAULT_WWW_DIR.is_dir():
+        print(
+            f"wettergraph: NOTE created {publish.DEFAULT_WWW_DIR}; Home Assistant registers "
+            "/local/ at startup, so restart Home Assistant once or the SVGs 404",
+            flush=True,
+        )
     if render.FONT_PATH.is_file():
         print(f"wettergraph: render font {render.FONT_PATH} present, icons {render.ICONS_DIR}", flush=True)
     else:
@@ -593,12 +714,20 @@ def main() -> None:
         name="metno-poller",
         daemon=True,
     ).start()
-    # Keeps /share in step with what the endpoint serves: render every minute,
-    # write only on a change.
+    # Keeps every published file in step with what the endpoint serves: render
+    # every minute, write only on a change. One thread, so the PNG and the two
+    # SVGs share a cadence.
     threading.Thread(
-        target=PUBLISHER.run_forever,
-        args=(default_png, stop),
-        name="share-publisher",
+        target=publish.run_forever,
+        args=(
+            [
+                (PUBLISHER, default_png),
+                (WWW["light"], lambda: theme_svg("light")),
+                (WWW["dark"], lambda: theme_svg("dark")),
+            ],
+            stop,
+        ),
+        name="publisher",
         daemon=True,
     ).start()
     # Report into the app log, where the operator can actually read it: HAOS
