@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
-"""Clause-level checks for the Wettergraph renderer (ticket 05).
+"""Clause-level checks for the Wettergraph renderer (redesign ticket 05).
 
     uv run --with resvg-py --with pillow python tools/render-check.py
 
 Every check is named after the clause it proves from
 ``.scratch/wettergraph-ha-widget/assets/graph-spec.md``. The geometry checks
-compare the renderer's output against ``assets/graph-reference.svg``, the
-hand-made reference that ticket 02 drew before any renderer existed. No network
-is used: the series are fixtures, so the output is reproducible.
+diff the renderer's own SVG against the layout reference ticket 01 cloned out
+of yr's meteogram - ``assets/graph-reference-v2.svg`` (yr's own dry forecast)
+and ``graph-reference-v2-rain.svg`` (the same geometry with bars, including an
+over-max one). No network is used: the series are fixtures, so the output is
+reproducible.
 
-The SVG is parsed as XML (``xml.etree``), and only top-level elements are
-inspected, so art inlined into the icons cannot be mistaken for graph geometry.
+The reference hard-codes yr's own band (3..33 °C); §5.1 fits ours by ladder and
+lands one row higher on the same data. That difference is a single constant,
+read off both files' own bottom axis labels, and every y comparison below
+carries it: the point is that the geometry is identical *once the band is
+applied*, which is what a clone means here.
+
+The SVG is parsed as XML (``xml.etree``); the four row groups of §3.3 are
+inspected by transform, so art inlined into the icons cannot be mistaken for
+graph geometry.
 
 Exit code 0 = every check passed.
 """
@@ -28,7 +37,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "wettergraph" / "app"))
-REFERENCE = ROOT / ".scratch" / "wettergraph-ha-widget" / "assets" / "graph-reference.svg"
+ASSETS = ROOT / ".scratch" / "wettergraph-redesign" / "assets"
+REFERENCE = ASSETS / "graph-reference-v2.svg"
+REFERENCE_RAIN = ASSETS / "graph-reference-v2-rain.svg"
 ICONS = ROOT / "wettergraph" / "app" / "icons"
 
 import render  # noqa: E402  (path set above)
@@ -43,17 +54,17 @@ except ImportError:  # pragma: no cover - the run line installs pillow
 FONT = os.environ.get("WG_FONT") or ""
 if not Path(FONT).is_file():
     FONT = next(
-        (str(candidate) for candidate in (render.FONT_PATH, Path("/tmp/DejaVuSans.ttf")) if Path(candidate).is_file()),
+        (str(c) for c in (render.FONT_PATH, Path("/tmp/DejaVuSans.ttf")) if Path(c).is_file()),
         str(render.FONT_PATH),
     )
 
-# The renderer reads midnights from the local clock; pin the check to UTC so the
-# parity fixture's Mo/Di land where the reference drew them (Sunday noon start).
+# The window and the day labels read the local clock; pin the check to UTC so
+# the reference's own Sunday-08:00 start lands where it drew it.
 os.environ["TZ"] = "UTC"
 time.tzset()
 
-START = int(datetime(2025, 9, 21, 12, 0, tzinfo=timezone.utc).timestamp())  # Sunday noon
-
+START = int(datetime(2026, 9, 20, 8, 0, tzinfo=timezone.utc).timestamp())  # So 20.09., 08:00
+STEP = render.STEP
 RESULTS: list[tuple[str, bool, str]] = []
 
 
@@ -68,24 +79,22 @@ def local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
-def root_of(svg: str) -> ET.Element:
-    return ET.fromstring(svg)
+def rows(svg: str) -> tuple[ET.Element, dict[str, ET.Element]]:
+    """The document and its four §3.3 row groups, keyed by transform."""
+    root = ET.fromstring(svg)
+    return root, {el.get("transform", ""): el for el in root if local(el.tag) == "g"}
 
 
-def top(svg: str) -> list[ET.Element]:
-    """Top-level elements only: the inlined icon art lives inside <g> groups."""
-    return list(root_of(svg))
+DAY_ROW, HOUR_ROW, PLOT_ROW, LEGEND_ROW = (
+    "translate(30 8)", "translate(30 32)", "translate(30 56)", "translate(30, 186)",
+)
 
 
-def by_tag(elements, name: str) -> list[ET.Element]:
-    return [el for el in elements if local(el.tag) == name]
+def kids(group: ET.Element, name: str) -> list[ET.Element]:
+    return [el for el in group if local(el.tag) == name]
 
 
-def texts(elements):
-    return [(el, el.text or "") for el in by_tag(elements, "text")]
-
-
-def number(el: ET.Element, name: str, default: float = 0.0) -> float:
+def num(el: ET.Element, name: str, default: float = 0.0) -> float:
     try:
         return float(el.get(name, default))
     except (TypeError, ValueError):
@@ -96,35 +105,37 @@ def close(a: float, b: float, tolerance: float = 0.05) -> bool:
     return abs(a - b) <= tolerance
 
 
-def same(a: float, b: float) -> bool:
-    return round(a, 1) == round(b, 1)
+def numbers(path: str) -> list[float]:
+    """Every number in a path, in order - a minus always opens a new one."""
+    return [float(value) for value in re.findall(r"-?\d+(?:\.\d+)?", path)]
 
 
 def iso(epoch: int) -> str:
     return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def fixture(t0: float, t1: float, p0: float = 0.0, p1: float = 0.0, hours: int = 49, code: str = "partlycloudy_day") -> list[dict]:
-    samples = []
-    for i in range(hours):
-        frac = i / (hours - 1)
-        samples.append(
-            {
-                "time": iso(START + i * 3600),
-                "temperature": round(t0 + (t1 - t0) * frac, 2),
-                "precipitation": round(p0 + (p1 - p0) * frac, 3),
-                "symbol_code": code,
-            }
-        )
-    return samples
+def series(temps, rain=None, codes="partlycloudy_day", start=START, hours=1) -> list[dict]:
+    """A sample list: one entry every ``hours`` hours from ``start``."""
+    rain = rain if rain is not None else [0.0] * len(temps)
+    codes = [codes] * len(temps) if isinstance(codes, str) else codes
+    return [
+        {
+            "time": iso(start + i * 3600 * hours),
+            "temperature": None if t is None else round(float(t), 4),
+            "precipitation": rain[i] if i < len(rain) else 0.0,
+            "symbol_code": codes[i] if i < len(codes) else None,
+        }
+        for i, t in enumerate(temps)
+    ]
 
 
-def render_svg(samples, **kwargs) -> str:
+def svg_of(samples, **kwargs) -> str:
     kwargs.setdefault("fetched_at", START)
+    kwargs.setdefault("now", START)
     return render.build_svg(samples, icons_dir=ICONS, **kwargs)
 
 
-def render_bytes(samples, **kwargs) -> bytes:
+def png_of(samples, **kwargs) -> bytes:
     kwargs.setdefault("fetched_at", START)
     kwargs.setdefault("now", START)
     font = kwargs.pop("font_path", FONT)
@@ -135,56 +146,83 @@ def png_size(data: bytes) -> tuple[int, int]:
     return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
 
 
-def per_hour(value: float) -> float:
-    return 44.0 + 730.0 * value / 48.0
+def chrome(svg: str) -> str:
+    """The document with the icon art removed: yr's symbols carry gradients,
+    filters and opacities of their own, and none of them are the graph's."""
+    root = ET.fromstring(svg)
+    for parent in list(root.iter()):
+        for child in list(parent):
+            if local(child.tag) == "g" and "scale(0.24)" in (child.get("transform") or ""):
+                parent.remove(child)
+    return ET.tostring(root).decode()
 
 
-def horizontal(lines_els) -> list[float]:
-    return sorted(number(el, "y1") for el in lines_els if same(number(el, "x1"), 44.0) and same(number(el, "x2"), 774.0) and same(number(el, "y1"), number(el, "y2")))
-
-
-def vertical(lines_els) -> list[float]:
-    return sorted(number(el, "x1") for el in lines_els if same(number(el, "y1"), 8.0) and same(number(el, "y2"), 283.0) and same(number(el, "x1"), number(el, "x2")))
+def band_of(plot: ET.Element) -> tuple[float, float]:
+    """(bottom °C, °C per row) read off a render's own axis labels (§5.2)."""
+    labels = {
+        round(num(el, "y")): float((el.text or "").rstrip("°"))
+        for el in kids(plot, "text")
+        if close(num(el, "x"), -5.0)
+    }
+    return labels[120], (labels[96] - labels[120]) / 2.0
 
 
 # ---------------------------------------------------------------- fixtures
 
 check("the check font file exists", Path(FONT).is_file(), FONT)
 
-parity = fixture(-1.7, 9.9, 0.0, 1.2)  # graph-reference.svg's own numbers
-flat = fixture(10.0, 10.0)
-dry = fixture(10.0, 14.0, 0.0, 0.0)
-freezing = fixture(-10.0, -5.0, 0.0, 3.0)
-peaked = [dict(sample) for sample in fixture(-20.0, -20.0)]
-for i, sample in enumerate(peaked):  # a 30 °C peak inside the last icon's box
-    sample["temperature"] = -20.0 + 50.0 * min(i, 45) / 45.0 if i <= 45 else 30.0 - (i - 45) * 3.0
+# yr's own hourly temperatures, read back out of the reference's curve, so the
+# parity render draws the same forecast the reference drew.
+reference_root, reference_rows = rows(REFERENCE.read_text())
+reference_plot = reference_rows[PLOT_ROW]
+reference_curve = numbers([el for el in kids(reference_plot, "path")][0].get("d", ""))
+REF_BOTTOM, REF_R = band_of(reference_plot)
+yr_temps = [REF_BOTTOM + (120.0 - reference_curve[i]) / (render.GRID_DY / REF_R)
+            for i in range(1, len(reference_curve), 6)]
+yr_temps.insert(0, REF_BOTTOM + (120.0 - reference_curve[1]) / (render.GRID_DY / REF_R))
+yr_temps = [REF_BOTTOM + (120.0 - y) / (render.GRID_DY / REF_R) for y in
+            [reference_curve[1]] + [reference_curve[i] for i in range(7, len(reference_curve), 6)]]
 
-reference_root = root_of(REFERENCE.read_text())
-reference_lines = by_tag(reference_root.iter(), "line")
-reference_vertical = sorted({round(number(el, "x1"), 1) for el in reference_lines if same(number(el, "y1"), 8.0) and same(number(el, "y2"), 283.0) and same(number(el, "x1"), number(el, "x2"))})
-reference_horizontal = sorted({round(number(el, "y1"), 1) for el in reference_lines if same(number(el, "x1"), 44.0) and same(number(el, "x2"), 774.0) and same(number(el, "y1"), number(el, "y2"))})
-reference_axis_y = sorted(round(number(el, "y"), 1) for el, _ in texts(reference_root.iter()) if same(number(el, "x"), 38.0))
+parity = series(yr_temps, [0.0] * 58 + [0.1, 0.0])
+rain_amounts = [0.0] * 60
+for i, mm in [(6, 0.3), (7, 1.1), (8, 2.4), (9, 1.6), (10, 0.4), (23, 0.2), (24, 0.9),
+              (31, 4.2), (32, 8.6), (33, 13.4), (34, 5.1), (35, 1.3), (48, 0.6), (49, 0.2)]:
+    rain_amounts[i] = mm
+wet = series(yr_temps, rain_amounts)
+flat = series([10.0] * 61)
+freezing = series([-12.0 + 0.1 * i for i in range(61)], [3.0] * 61)
+warm = series([12.0 + 0.05 * i for i in range(61)])
 
-parity_svg = render_svg(parity)
-parity_top = top(parity_svg)
-parity_lines = by_tag(parity_top, "line")
-parity_horizontal = horizontal(parity_lines)
-parity_vertical = vertical(parity_lines)
-parity_texts = texts(parity_top)
-parity_paths = by_tag(parity_top, "path")
+parity_svg = svg_of(parity)
+CHROME = chrome(parity_svg)
+parity_root, parity_rows = rows(parity_svg)
+plot = parity_rows[PLOT_ROW]
+OUR_BOTTOM, OUR_R = band_of(plot)
+# §5.1 fits the band; the reference hard-codes yr's. One constant, both ys.
+DELTA = (OUR_BOTTOM - REF_BOTTOM) * (render.GRID_DY / OUR_R)
 
 
-# ------------------------------------------------------------------ §1 size
+# ------------------------------------------------------- §1 output surface
 
 
-default_png = render_bytes(parity)
-check("§1.1 default PNG is 782 x 391", png_size(default_png) == (782, 391), str(png_size(default_png)))
+check("§1.1 the SVG is 794 x 210 over the 794.2373 x 210 design canvas",
+      parity_root.get("width") == "794" and parity_root.get("height") == "210"
+      and parity_root.get("viewBox") == "0 0 794.2373 210"
+      and parity_root.get("preserveAspectRatio") == "none",
+      f'{parity_root.get("width")}x{parity_root.get("height")} {parity_root.get("viewBox")}')
+
+default_png = png_of(parity)
+check("§1.1 the default PNG is 794 x 210", png_size(default_png) == (794, 210), str(png_size(default_png)))
 check("§1.1 the bytes are a real PNG", default_png[:8] == b"\x89PNG\r\n\x1a\n", default_png[:4].hex())
 
-clamps = [(100, 480), (479, 480), (480, 480), (782, 782), (1564, 1564), (1600, 1564), ("junk", 782)]
-clamp_detail = [(asked, png_size(render_bytes(parity, width=asked))[0]) for asked, _ in clamps]
-check("§1.2 width clamps to 480..1564, junk falls back to 782", all(got == wanted for (asked, wanted), (_, got) in zip(clamps, clamp_detail)), str(clamp_detail))
-check("§1.3 height is always round(W/2)", all(png_size(render_bytes(parity, width=w)) == (w, round(w / 2)) for w in (480, 781, 782, 1563, 1564)))
+clamps = [(100, 560), (559, 560), (560, 560), (794, 794), (1588, 1588), (2000, 1588), ("junk", 794)]
+clamped = [(asked, png_size(png_of(parity, width=asked))[0]) for asked, _ in clamps]
+check("§1.2 width clamps to 560..1588, junk falls back to 794",
+      all(got == wanted for (_, wanted), (_, got) in zip(clamps, clamped)), str(clamped))
+check("§1.3 the height follows the design canvas, it is never set",
+      all(png_size(png_of(parity, width=w)) == (w, render.height_for(w)) for w in (560, 794, 1000, 1588))
+      and [render.height_for(w) for w in (560, 794, 1588)] == [148, 210, 420],
+      str([(w, render.height_for(w)) for w in (560, 794, 1000, 1588)]))
 
 if Image is not None:
     alpha = Image.open(io.BytesIO(default_png)).convert("RGBA").getchannel("A").getextrema()
@@ -192,215 +230,431 @@ if Image is not None:
 else:
     check("§1.4 opaqueness needs pillow", False, "run with --with pillow")
 
-top_rects = by_tag(parity_top, "rect")
-check("§1.4 no rounded panel corners, no border: one canvas rect and nothing else",
-      len(top_rects) == 1 and number(top_rects[0], "x") == 0 and "stroke" not in top_rects[0].attrib,
-      f"{len(top_rects)} rects")
+canvas = [el for el in parity_root if local(el.tag) == "rect"]
+check("§1.4 one full-canvas background rect, no border and no rounded corners",
+      len(canvas) == 1 and close(num(canvas[0], "width"), render.DESIGN_WIDTH)
+      and close(num(canvas[0], "height"), 210.0) and "stroke" not in canvas[0].attrib
+      and "rx" not in canvas[0].attrib,
+      f"{len(canvas)} top-level rects")
+check("§1.5 one look: no style switch in the renderer's signature",
+      "style" not in render.build_svg.__code__.co_varnames)
 
 
 # ---------------------------------------------------------------- §2 theme
 
 
-check("§2.1/§2.2 light and dark are real variants", render_bytes(parity, theme="light") != render_bytes(parity, theme="dark"))
-check("§2.2 an unknown theme falls back to light", render_bytes(parity, theme="chartreuse") == render_bytes(parity, theme="light"))
+light_svg, dark_svg = parity_svg, svg_of(parity, theme="dark")
+check("§2.1/§2.2 light and dark are real variants", png_of(parity, theme="dark") != default_png)
+check("§2.2 an unknown theme falls back to light", svg_of(parity, theme="chartreuse") == light_svg)
+check("§2.1 only the palette changes: same element shapes, same geometry",
+      [local(el.tag) for el in ET.fromstring(dark_svg).iter()] == [local(el.tag) for el in parity_root.iter()]
+      and [el.get("transform") for el in ET.fromstring(dark_svg).iter()] == [el.get("transform") for el in parity_root.iter()])
 
-light_svg, dark_svg = render_svg(parity, theme="light"), render_svg(parity, theme="dark")
-light_colours = ("#ffffff", "#dfe3e8", "#b9c0c8", "#c8cfd7", "#aab2bb", "#4a5158", "#d81e05", "#4a7fd4")
-dark_colours = ("#171a1f", "#333a42", "#5b6570", "#454d57", "#c3c9d1", "#ff6a4d", "#6fa8ff")
-check("§2.3 the light palette is in the light SVG", all(colour in light_svg for colour in light_colours), str([c for c in light_colours if c not in light_svg]))
-check("§2.3 the dark palette is in the dark SVG", all(colour in dark_svg for colour in dark_colours), str([c for c in dark_colours if c not in dark_svg]))
-check("§2.3 the dark stale colour is in a stale dark SVG", "#fbbf24" in render_svg(parity, theme="dark", stale=True, age_seconds=7 * 3600))
+for name, colours in (
+    ("light", ("#ffffff", "#c3d0d8", "#56616c", "#21292b", "#c60000", "#006edb")),
+    ("dark", ("#020a14", "#374759", "#c3d0d8", "#ffffff", "#ff2d3f", "#00b8f1", "#a2a5b3")),
+):
+    document = light_svg if name == "light" else dark_svg
+    check(f"§2.3 the {name} palette is in the {name} SVG",
+          all(colour in document for colour in colours), str([c for c in colours if c not in document]))
+
+dark_plot = rows(dark_svg)[1][PLOT_ROW]
+dark_separators = {el.get("stroke") for el in kids(dark_plot, "line") if close(num(el, "y2"), 120.0)}
+check("§2.3 the dark day separator is #c3d0d8 - the hex light mode uses for its grid",
+      dark_separators == {"#374759", "#c3d0d8"}, str(sorted(dark_separators)))
+
+overmax_light = [el for el in kids(rows(svg_of(wet))[1][PLOT_ROW], "text") if close(num(el, "y"), 6.0)]
+overmax_dark = [el for el in kids(rows(svg_of(wet, theme="dark"))[1][PLOT_ROW], "text") if close(num(el, "y"), 6.0)]
+check("§2.3 the over-max value inverts (#ffffff light, #21292b dark): it sits on the bar",
+      overmax_light and overmax_light[0].get("fill") == "#ffffff"
+      and overmax_dark and overmax_dark[0].get("fill") == "#21292b",
+      f'{[e.get("fill") for e in overmax_light]} / {[e.get("fill") for e in overmax_dark]}')
 
 
-# --------------------------------------------------------------- §3 layout
+# --------------------------------------------------------------- §3 canvas
 
 
-check("§3.1/§3.2 content spans x=44..774 (padding 8, gutter 36)",
-      all(same(number(el, "x1"), 44.0) and same(number(el, "x2"), 774.0) for el in parity_lines if same(number(el, "y1"), number(el, "y2"))),
-      str([(number(el, "x1"), number(el, "x2")) for el in parity_lines if same(number(el, "y1"), number(el, "y2"))]))
-check("§3.3 temperature panel 8..283 and precipitation baseline 383",
-      close(parity_horizontal[0], 8.0) and close(parity_horizontal[-1], 383.0) and any(close(y, 283.0) for y in parity_horizontal),
-      str(parity_horizontal))
+check("§3.1/§3.3 the four row groups sit at 8 / 32 / 56 / 186, 30 px in",
+      set(parity_rows) == {DAY_ROW, HOUR_ROW, PLOT_ROW, LEGEND_ROW}, str(sorted(parity_rows)))
+check("§3.2 the plot is 734.2373 x 120 in a 30 px gutter either side",
+      all(close(num(el, "x2"), render.PLOT_W) for el in kids(plot, "line") if close(num(el, "y1"), num(el, "y2")))
+      and close(render.DESIGN_WIDTH - render.PLOT_W, 60.0))
 
-axis_labels = [(el, text) for el, text in parity_texts if same(number(el, "x"), 38.0)]
-check("§3.5 axis values are right-aligned at x=38",
-      axis_labels and all(el.get("text-anchor") == "end" for el, _ in axis_labels), f"{len(axis_labels)} labels")
-check("§3.5 the label rows match graph-reference.svg",
-      sorted(round(number(el, "y"), 1) for el, _ in axis_labels) == reference_axis_y,
-      f"{sorted(round(number(el, 'y'), 1) for el, _ in axis_labels)} vs {reference_axis_y}")
-
-# The stack exists for a browser showing the SVG; resvg only ever sees the first
-# name, which is the file it was handed (redesign ticket 00).
 STACK = "DejaVu Sans, Verdana, sans-serif"
+all_texts = [el for el in parity_root.iter() if local(el.tag) == "text"]
 check("§3.4 every text node leads with DejaVu Sans",
-      all(el.get("font-family") == STACK for el, _ in parity_texts),
-      str([el.get("font-family") for el, _ in parity_texts if el.get("font-family") != STACK]))
-
-with_font = render_bytes(parity, font_path=FONT)
-without_font = render_bytes(parity, font_path="/nonexistent/DejaVuSans.ttf")
+      all(el.get("font-family") == STACK for el in all_texts),
+      str({el.get("font-family") for el in all_texts}))
+with_font = png_of(parity, font_path=FONT)
+without_font = png_of(parity, font_path="/nonexistent/DejaVuSans.ttf")
 check("§3.4 the font is loaded by path (without it resvg draws no text)",
-      with_font != without_font and len(with_font) > len(without_font), f"{len(with_font)}B vs {len(without_font)}B")
+      with_font != without_font and len(with_font) > len(without_font),
+      f"{len(with_font)}B vs {len(without_font)}B")
+
+celsius = [el for el in kids(plot, "text") if close(num(el, "x"), -5.0)]
+millimetres = [el for el in kids(plot, "text") if close(num(el, "x"), render.PLOT_W + 5)]
+reference_celsius = [el for el in kids(reference_plot, "text") if close(num(el, "x"), -5.0)]
+check("§3.5 five °C labels, right-aligned at x=-5, on the reference's own rows",
+      len(celsius) == 5 and all(el.get("text-anchor") == "end" for el in celsius)
+      and [num(el, "y") for el in celsius] == [num(el, "y") for el in reference_celsius]
+      and [num(el, "y") for el in celsius] == [24.0, 48.0, 72.0, 96.0, 120.0],
+      str([(num(el, "y"), el.text) for el in celsius]))
+check("§3.5 five mm labels reading 8, 6, 4, 2, 0, left-aligned right of the plot",
+      [el.text for el in millimetres] == ["8", "6", "4", "2", "0"]
+      and all(el.get("text-anchor") is None for el in millimetres),
+      str([el.text for el in millimetres]))
+glyphs = [el.get("transform") for el in kids(plot, "g") if "scale(0.5)" in (el.get("transform") or "")]
+check("§3.5 the thermometer and droplet ride at the reference's own offsets, filled not filtered",
+      glyphs == [el.get("transform") for el in kids(reference_plot, "g") if "scale(0.5)" in (el.get("transform") or "")]
+      and "filter" not in CHROME and "COLOUR" not in CHROME and parity_svg.count("#56616c") > 10,
+      str(glyphs))
+
+cold_labels = [el.text for el in kids(rows(svg_of(freezing))[1][PLOT_ROW], "text") if close(num(el, "x"), -5.0)]
+check("§3.6 a band bottom at -10 °C or below drops the degree sign from every label",
+      all("°" not in (text or "") for text in cold_labels) and cold_labels[-1] == "-12",
+      str(cold_labels))
+check("§3.6 every other render keeps it", all("°" in (el.text or "") for el in celsius))
+
+legend = parity_rows[LEGEND_ROW]
+reference_legend = reference_rows[LEGEND_ROW]
+check("§3.7 the legend is the reference's, entry for entry",
+      ET.tostring(legend).decode().replace(f' font-family="{STACK}"', "").replace(" />", "/>").replace("\n", "")
+      == ET.tostring(reference_legend).decode().replace(" />", "/>").replace("\n", ""),
+      ET.tostring(legend).decode()[:160])
+check("§3.7 both captions, German, with the units",
+      sorted(el.text for el in legend.iter() if local(el.tag) == "text") == ["Niederschlag mm", "Temperatur °C"])
 
 
 # ---------------------------------------------------------------- §4 time
 
 
-curve_paths = [el for el in parity_paths if el.get("fill") == "none" and el.get("stroke") in ("#d81e05", "#ff6a4d")]
-curve_d = curve_paths[0].get("d", "") if len(curve_paths) == 1 else ""
-check("§4.1 one curve of 49 hourly points, x=44 to x=774",
-      len(curve_paths) == 1 and curve_d.count("C") == 48 and curve_d.startswith("M 44.0") and " 774.0 " in curve_d.replace("C", " "),
-      f"paths={len(curve_paths)} segments={curve_d.count('C')}")
-check("§4.2 the curve is a spline (cubic Beziers)", " C " in curve_d, curve_d[:40])
+curve = [el for el in kids(plot, "path") if el.get("fill") == "none"]
+curve_d = curve[0].get("d", "") if len(curve) == 1 else ""
+check("§4.1 one curve of 61 hourly points over 60 h, x=0 to x=734.2373",
+      len(curve) == 1 and curve_d.count("C") == 60 and curve_d.startswith("M0 ")
+      and close(numbers(curve_d)[-2], render.PLOT_W),
+      f"paths={len(curve)} segments={curve_d.count('C')}")
+check("§4.2/§5.5 the curve is the reference's spline, point for point, once the band is applied",
+      len(numbers(curve_d)) == len(reference_curve)
+      and all(close(ours, reference) for ours, reference in zip(numbers(curve_d)[0::2], reference_curve[0::2]))
+      and all(close(ours, reference + DELTA) for ours, reference in zip(numbers(curve_d)[1::2], reference_curve[1::2])),
+      f"delta {DELTA:+.1f} px ({OUR_BOTTOM}..{OUR_BOTTOM + 10 * OUR_R} vs the reference's {REF_BOTTOM}..)")
 
-expected_grid = [round(per_hour(h), 1) for h in (6, 12, 18, 24, 30, 36, 42)]
-check("§4.3 a time grid line every 6 h, at the reference's x positions",
-      sorted({round(x, 1) for x in parity_vertical}) == reference_vertical and reference_vertical == expected_grid,
-      f"{[round(x, 1) for x in parity_vertical]} vs {reference_vertical}")
+lines = kids(plot, "line")
+reference_lines = kids(reference_plot, "line")
+check("§4.3 the cell grid is the reference's: 11 horizontal, 61 vertical, no separate frame",
+      [(num(el, "x1"), num(el, "y1"), num(el, "x2"), num(el, "y2")) for el in lines]
+      == [(num(el, "x1"), num(el, "y1"), num(el, "x2"), num(el, "y2")) for el in reference_lines]
+      and len(lines) == 72,
+      f"{len(lines)} lines vs the reference's {len(reference_lines)}")
+check("§4.4 a midnight replaces its grid line, it does not add one",
+      [el.get("stroke") for el in lines] == [el.get("stroke") for el in reference_lines]
+      and sum(1 for el in lines if el.get("stroke") == "#56616c" and close(num(el, "y2"), 120.0)) == 2,
+      str([round(num(el, "x1"), 1) for el in lines if el.get("stroke") == "#56616c" and close(num(el, "y2"), 120.0)]))
 
-midnight_labels = [(el, text) for el, text in parity_texts if same(number(el, "y"), 280.0)]
-check("§4.4/§4.5 midnights carry the German weekday at baseline y=280",
-      sorted(round(number(el, "x"), 1) for el, _ in midnight_labels) == [226.5, 591.5]
-      and sorted(text for _, text in midnight_labels) == ["Di", "Mo"],
-      f"{[(round(number(el, 'x'), 1), text) for el, text in midnight_labels]}")
-check("§4.4 midnight lines are 1.5 px",
-      len([el for el in parity_lines if close(number(el, "y1"), 8.0) and close(number(el, "y2"), 283.0) and number(el, "stroke-width") == 1.5]) == 2)
-check("§4.6 no clock times anywhere", not any(":" in text for _, text in parity_texts), str([t for _, t in parity_texts]))
+day_labels = kids(parity_rows[DAY_ROW], "text")
+reference_days = kids(reference_rows[DAY_ROW], "text")
+check("§4.5 day labels are the reference's: German, numeric, at the boundary, 16 px weight 600",
+      [(round(num(el, "x"), 4), el.text) for el in day_labels]
+      == [(round(num(el, "x"), 4), el.text) for el in reference_days]
+      and [el.text for el in day_labels] == ["So 20.09.", "Mo 21.09.", "Di 22.09."]
+      and all(el.get("font-size") == "16" and el.get("font-weight") == "600" for el in day_labels),
+      str([el.text for el in day_labels]))
+
+for hour, wanted, why in (
+    (8, ["So 20.09.", "Mo 21.09.", "Di 22.09."], "a morning start labels every day it touches"),
+    (20, ["Mo 21.09.", "Di 22.09.", "Mi 23.09."], "an 18:00-23:00 start drops the opening day"),
+    (13, ["So 20.09.", "Mo 21.09.", "Di 22.09."], "a 12:00-18:00 start drops the closing day"),
+    (18, ["Mo 21.09.", "Di 22.09."], "an 18:00 start drops both"),
+):
+    moment = START - 8 * 3600 + hour * 3600
+    labels = [el.text for el in kids(rows(svg_of(series(yr_temps), now=moment, fetched_at=moment))[1][DAY_ROW], "text")]
+    check(f"§4.6 {why} ({hour:02d}:00 start)", labels == wanted, str(labels))
+
+hour_labels = kids(parity_rows[HOUR_ROW], "text")
+check("§4.7 30 hour labels, every 2 h, the last point skipped - the reference's own row",
+      [(round(num(el, "x"), 4), el.text) for el in hour_labels]
+      == [(round(num(el, "x"), 4), el.text) for el in kids(reference_rows[HOUR_ROW], "text")]
+      and len(hour_labels) == 30 and hour_labels[0].text == "08" and hour_labels[-1].text == "18",
+      f"{len(hour_labels)} labels")
+
+# §4.8 the normal case: a window opened after the poll runs past met.no's
+# hourly entries into its 6-hourly ones.
+tail = series(yr_temps[:24], [0.0] * 24) + series(
+    [15.0, 13.0, 16.0, 14.0, 17.0, 15.0, 18.0, 16.0, 19.0], [0.6] * 9, start=START + 24 * 3600, hours=6
+)
+tail_plot = rows(svg_of(tail, now=START + 6 * 3600, fetched_at=START))[1][PLOT_ROW]
+tail_curve = [el for el in kids(tail_plot, "path") if el.get("fill") == "none"][0].get("d", "")
+check("§4.8 an interpolated tail still reaches the right edge, in one unbroken curve",
+      tail_curve.count("C") == 60 and close(numbers(tail_curve)[-2], render.PLOT_W),
+      f"segments={tail_curve.count('C')} end={numbers(tail_curve)[-2:]}")
+gap = series(yr_temps[:20] + [None] * 5 + yr_temps[25:])
+gap_paths = [el for el in kids(rows(svg_of(gap))[1][PLOT_ROW], "path") if el.get("fill") == "none"]
+check("§4.8 a slot with no entry either side is a gap: the curve breaks",
+      len(gap_paths) == 2, f"{len(gap_paths)} curve paths")
 
 
-# ------------------------------------------------------------- §5 axis/curve
+# ------------------------------------------------------------ §5 axis/curve
 
 
-labels = sorted((number(el, "y"), text) for el, text in axis_labels)
-label_values = [float(text.replace(" °C", "")) for _, text in labels]
-check("§5.1 the axis fits -1.7..9.9 to -5..15 with one reserved step",
-      label_values == [15.0, 10.0, 5.0, 0.0, -5.0], str(label_values))
-check("§5.4/§5.6 every 5 °C line is labelled, the top one carries the unit",
-      labels[0][1] == "15 °C" and labels[-1][1] == "-5", str(labels))
-check("§5.4/§5.5 the horizontal grid matches graph-reference.svg",
-      [round(y, 1) for y in parity_horizontal if y <= 283] == [y for y in reference_horizontal if 8 <= y <= 283],
-      f"{[round(y, 1) for y in parity_horizontal if y <= 283]} vs {reference_horizontal}")
+ladder = [
+    ((7.2, 23.0), (6.0, 3.0), "yr's own light forecast"),
+    ((10.0, 10.0), (10.0, 1.0), "a flat window takes the finest step"),
+    ((-3.2, 30.0), (-5.0, 5.0), "a wide window climbs the ladder"),
+    ((-12.0, 80.0), (-20.0, 10.0), "nothing fits: r = 10 and the icons clamp"),
+]
+for (low, high), wanted, why in ladder:
+    got = render.temperature_band([low, high])
+    check(f"§5.1 the ladder fits {low}..{high} to {wanted[0]}..{wanted[0] + 10 * wanted[1]} - {why}",
+          got == wanted, str(got))
+check("§5.1 every fit but the last leaves the 29 px of icon headroom §6.3 needs",
+      all((band[0] + 10 * band[1] - high) * (12 / band[1]) >= render.ICON_HEADROOM
+          for (low, high), band, _ in ladder[:-1] for band in [render.temperature_band([low, high])]))
 
-zero_lines = [el for el in parity_lines if number(el, "stroke-width") == 1.5 and el.get("stroke") == "#b9c0c8"]
-check("§5.5 the 0 °C line is 1.5 px in the zero colour", len(zero_lines) == 1 and close(number(zero_lines[0], "y1"), 214.2), str([(number(el, "y1"), el.get("stroke")) for el in zero_lines]))
+# yr's own dark meteogram, read back out of its curve: band 4..24 at 2 °C per
+# row (its own axis labels). §5.1 claims to reproduce that band exactly.
+dark_original = (ASSETS / "meteogram-6325496-dark.svg").read_text()
+dark_plot_text = dark_original[dark_original.index('<g transform="translate(30 48)">'):
+                               dark_original.index('<g transform="translate(30 168)">')]
+dark_curve = numbers(re.search(
+    r'd="M([^"]+)"\s*\n?\s*fill="none"\s*\n?\s*stroke="url\(#temperature-curve-gradient\)"',
+    dark_plot_text).group(1))
+dark_temps = [4.0 + (120.0 - y) / 6.0 for y in dark_curve[1::2]]
+check("§5.1 the ladder reproduces yr's own dark sample exactly: 4..24 at 2 °C a row",
+      render.temperature_band(dark_temps) == (4.0, 2.0),
+      f"{render.temperature_band(dark_temps)} from {len(dark_temps)} of yr's own points")
 
-stroke = re.search(r'stroke-width="([0-9.]+)" stroke-linecap="round" stroke-linejoin="round"', parity_svg)
-check("§5.3 curve stroke 2.5 px, round caps and joins",
-      bool(stroke) and stroke.group(1) == "2.5" and curve_paths and curve_paths[0].get("fill") == "none", stroke.group(1) if stroke else "no curve")
-check("§5.7 celsius only", "°F" not in parity_svg and "fahrenheit" not in parity_svg.lower())
+check("§5.2 the axis reads bottom + (120 - y) * r / 12, in whole degrees",
+      [el.text for el in celsius] == [f"{int(OUR_BOTTOM + (120 - num(el, 'y')) * OUR_R / 12)}°" for el in celsius],
+      str([el.text for el in celsius]))
+check("§5.3 the curve is 2 px, no fill, no markers, no glow",
+      curve[0].get("stroke-width") == "2" and curve[0].get("fill") == "none"
+      and "stroke-linecap" not in curve[0].attrib and "filter" not in CHROME)
+check("§5.4 the fit keeps the whole curve inside the band",
+      all(0 <= y <= 120 for y in numbers(curve_d)[1::2]),
+      f"{min(numbers(curve_d)[1::2]):.1f}..{max(numbers(curve_d)[1::2]):.1f}")
 
-segments = render._bezier_segments([(0.0, 0.0), (1.0, 1.0), (2.0, 0.0)])
-check("§5.2 Catmull-Rom tension 0.5: C1 = P + (next - previous)/6, C2 = next - (after - P)/6",
-      close(segments[0][1][0], 1.0 / 6.0) and close(segments[0][1][1], 1.0 / 6.0)
-      and close(segments[0][2][0], 1.0 - 2.0 / 6.0) and close(segments[0][2][1], 1.0),
-      str(segments[0]))
+defs = kids(plot, "defs")
+gradients = [el for el in defs[0] if local(el.tag) == "linearGradient"] if defs else []
+stops = list(gradients[0]) if gradients else []
+check("§5.5 one path, one gradient: two coincident stops at y(0 °C), padded",
+      len(curve) == 1 and len(gradients) == 1 and len(stops) == 3
+      and gradients[0].get("gradientUnits") == "userSpaceOnUse"
+      and gradients[0].get("spreadMethod") == "pad"
+      and stops[0].get("offset") == stops[1].get("offset")
+      and stops[0].get("stop-color") == "#c60000" and stops[1].get("stop-color") == "#006edb"
+      and stops[2].get("offset") == "100%",
+      str([(el.get("offset"), el.get("stop-color")) for el in stops]))
+check("§5.5 the stop is y(0 °C) / 120, allowed outside 0..100 % - the reference's own 110 % becomes ours",
+      close(float(stops[0].get("offset").rstrip("%")),
+            (120 - (0 - OUR_BOTTOM) * 12 / OUR_R) / 120 * 100),
+      stops[0].get("offset"))
+warm_stops = [el.get("offset") for el in kids(rows(svg_of(warm))[1][PLOT_ROW], "defs")[0][0]]
+frozen_stops = [el.get("offset") for el in kids(rows(svg_of(freezing))[1][PLOT_ROW], "defs")[0][0]]
+check("§5.5 an all-warm window pads warm (offset > 100 %), an all-frozen one pads cold (offset < 0)",
+      float(warm_stops[0].rstrip("%")) > 100 and float(frozen_stops[0].rstrip("%")) < 0,
+      f"{warm_stops[0]} / {frozen_stops[0]}")
+check("§5.6/§5.7 Celsius only, the unit on the glyph and never in a label",
+      "°F" not in parity_svg and "fahrenheit" not in parity_svg.lower()
+      and not any("C" in (el.text or "") for el in celsius))
 
 
 # ---------------------------------------------------------------- §6 icons
 
 
-parity_icons = [el for el in top(parity_svg) if local(el.tag) == "g" and el.get("transform")]
-icon_translates = [re.findall(r"translate\(([-0-9.]+) ([-0-9.]+)\)", el.get("transform"))[0] for el in parity_icons]
-icon_scales = [re.findall(r"scale\(([-0-9.]+)\)", el.get("transform"))[0] for el in parity_icons]
-check("§6.1 16 icons, one every 3 h", len(parity_icons) == 16, f"{len(parity_icons)} icons")
-check("§6.2 the icon box is 28 x 28 (100-unit art scaled 0.28)",
-      all(close(float(scale), 0.28, 0.0001) for scale in icon_scales), str(sorted(set(icon_scales))))
-flat_icons = [el for el in top(render_svg(flat)) if local(el.tag) == "g" and el.get("transform")]
-flat_translates = [re.findall(r"translate\(([-0-9.]+) ([-0-9.]+)\)", el.get("transform"))[0] for el in flat_icons]
-check("§6.2/§6.3 a flat curve at the panel bottom puts the first box at (30, 252)",
-      close(float(flat_translates[0][0]), 30.0) and close(float(flat_translates[0][1]), 252.0), str(flat_translates[0]))
+icons = [el for el in kids(plot, "g") if "scale(0.24)" in (el.get("transform") or "")]
+icon_xy = [tuple(float(v) for v in el.get("transform").split("translate(")[1].split(")")[0].split()) for el in icons]
+reference_icons = [(num(el, "x"), num(el, "y")) for el in kids(reference_plot, "svg")]
+check("§6.1/§6.2 30 icons, every 2 h, centred on the odd point, in a 24 px box",
+      len(icons) == 30
+      and all(close(x, i * STEP - 12) for (x, _), i in zip(icon_xy, range(1, 60, 2)))
+      and close(24.0 / 100.0 * 100, 24.0),
+      f"{len(icons)} icons")
+check("§6.2 a 24 px box clears its neighbour by 0.47 px: anything larger collides",
+      close(2 * STEP - render.ICON_BOX, 0.4746, 0.001), f"{2 * STEP - render.ICON_BOX:.4f} px")
+check("§6.3 every box lands where the reference put it, once the band is applied",
+      all(close(x, rx) and close(y, ry + DELTA) for (x, y), (rx, ry) in zip(icon_xy, reference_icons)),
+      str([(round(y - ry - DELTA, 2)) for (_, y), (_, ry) in zip(icon_xy, reference_icons)][:6]))
+check("§6.3 the bottom rides 5 px above the curve where the curve is flat",
+      close(rows(svg_of(flat))[1][PLOT_ROW] is not None and
+            [float(el.get("transform").split()[1].split(")")[0])
+             for el in kids(rows(svg_of(flat))[1][PLOT_ROW], "g")
+             if "scale(0.24)" in (el.get("transform") or "")][0],
+            120 - (10.0 - 10.0) * 12 - 29.0 + 0.0, 0.6),
+      "flat 10 °C window")
+spike = series([0.0] * 61)
+for i in (0, 1, 2, 3):
+    spike[i]["temperature"] = 95.0  # off the top of an r = 10 band
+spike_icons = [float(el.get("transform").split()[1].split(")")[0])
+               for el in kids(rows(svg_of(spike))[1][PLOT_ROW], "g")
+               if "scale(0.24)" in (el.get("transform") or "")]
+check("§6.3 a curve through the ceiling clamps the box to the plot top",
+      close(min(spike_icons), 0.0), f"top {min(spike_icons)}")
 
-peaked_svg = render_svg(peaked)
-peaked_icons = [el for el in top(peaked_svg) if local(el.tag) == "g" and el.get("transform")]
-peaked_tops = [float(re.findall(r"translate\([-0-9.]+ ([-0-9.]+)\)", el.get("transform"))[0]) for el in peaked_icons]
-check("§6.3 the icon is clamped to the temperature panel top (y=8)",
-      any(close(top_value, 8.0) for top_value in peaked_tops), f"tops {sorted(set(peaked_tops))}")
-
-day = render_svg(fixture(10.0, 12.0, code="clearsky_day"))
-night = render_svg(fixture(10.0, 12.0, code="clearsky_night"))
-check("§6.4 day and night art come from the symbol code itself", day != night and 'id="wg0_' in day and 'id="wg0_' in night)
-check("§6.6 vector icons keep their art under a prefixed id", 'id="wg0_partlycloudy_day"' in parity_svg)
-check("§6.6 webp icons are inlined as a data URI",
-      "base64" in render_svg(fixture(3.0, 4.0, code="fair_night")))
-check("§6.5 no icon labels or legend", not any("icon" in text.lower() for _, text in parity_texts))
+codes = ["clearsky_day" if i % 2 == 0 else "cloudy" for i in range(61)]
+coded = rows(svg_of(series(yr_temps, codes=codes)))[1][PLOT_ROW]
+first_icon = [el for el in kids(coded, "g") if "scale(0.24)" in (el.get("transform") or "")][0]
+check("§6.4 the icon of a 2 h cell is the symbol of its first hour (point i - 1)",
+      'id="wg1_clearsky_day' in ET.tostring(first_icon).decode(),
+      ET.tostring(first_icon).decode()[:90])
+order = [local(el.tag) for el in plot]
+icon_positions = [i for i, el in enumerate(plot) if "scale(0.24)" in (el.get("transform") or "")]
+check("§6.4 icons are drawn last, over the bars and the curve",
+      min(icon_positions) > order.index("path") > (max([i for i, el in enumerate(plot)
+          if local(el.tag) == "rect"] or [-1])),
+      f"bars<{order.index('path')}<icons from {min(icon_positions)}")
+check("§6.5 the art is theme-independent",
+      ET.tostring(icons[0]).decode().replace("#", "") ==
+      ET.tostring([el for el in kids(dark_plot, "g") if "scale(0.24)" in (el.get("transform") or "")][0]).decode().replace("#", ""))
+check("§6.6 vector art keeps its own ids under a per-icon prefix", 'id="wg1_partlycloudy_day' in parity_svg)
+check("§6.6 raster art is inlined as a data URI",
+      "base64" in svg_of(series(yr_temps, codes="fair_night")))
+check("§6.6 no icon label and no icon border",
+      not any("icon" in (el.text or "").lower() for el in all_texts))
 
 
 # -------------------------------------------------------------- §7 precip
 
 
-band_fills = [el for el in parity_paths if el.get("fill-opacity") == "0.55"]
-band_strokes = [el for el in parity_paths if el.get("stroke") in ("#4a7fd4", "#6fa8ff") and el.get("fill") == "none"]
-check("§7.1/§7.2 one filled area from the 383 baseline",
-      len(band_fills) == 1 and band_fills[0].get("d", "").startswith("M 44.0 383.0") and band_fills[0].get("d", "").count("L") == 50,
-      f"fills={len(band_fills)} points={band_fills[0].get('d', '').count('L') if band_fills else 0}")
-check("§7.8 the top edge joins with straight lines only",
-      len(band_strokes) == 1 and band_strokes[0].get("d", "").count("C") == 0 and band_strokes[0].get("d", "").count("L") == 48,
-      f"strokes={len(band_strokes)}")
-check("§7.3 the scale top is the smallest of 0.5/1/2/5/10/20 that fits (peak 1.2 -> 2)",
-      any(text == "2 mm/h" for _, text in parity_texts), str([t for _, t in parity_texts]))
-check("§7.4 the scale label sits at (48, 299)",
-      any(close(number(el, "x"), 48.0) and close(number(el, "y"), 299.0) for el, _ in parity_texts))
-check("§7.5 the fill is 55 % opaque, the top edge 1.5 px",
-      band_fills and band_fills[0].get("fill-opacity") == "0.55" and band_strokes and number(band_strokes[0], "stroke-width") == 1.5)
+wet_plot = rows(svg_of(wet))[1][PLOT_ROW]
+wet_rects = kids(wet_plot, "rect")
+wet_bars = [el for el in wet_rects if close(num(el, "width"), STEP - 1)]
+reference_wet = kids(rows(REFERENCE_RAIN.read_text())[1][PLOT_ROW], "rect")
+reference_wet = [el for el in reference_wet if num(el, "height") > 0]
+check("§7.1/§7.3 one bar per hourly interval, in the one band, behind the curve",
+      [local(el.tag) for el in wet_plot].index("rect") < [local(el.tag) for el in wet_plot].index("path")
+      and len(wet_bars) == 14 and all(el.get("fill") == "#006edb" for el in wet_bars),
+      f"{len(wet_bars)} bars of {len(wet_rects)} rects")
+check("§7.2/§7.4 every bar is the reference's, mm for mm on the fixed 0..10 axis",
+      len(wet_bars) == len(reference_wet)
+      and all(close(num(a, "x"), num(b, "x")) and close(num(a, "y"), num(b, "y"))
+              and close(num(a, "width"), num(b, "width")) and close(num(a, "height"), num(b, "height"))
+              for a, b in zip(wet_bars, reference_wet)),
+      f"{len(wet_bars)} ours vs {len(reference_wet)} reference bars")
+check("§7.2 the mm axis never rescales: a dry render and a wet one read the same",
+      [el.text for el in millimetres]
+      == [el.text for el in kids(wet_plot, "text") if close(num(el, "x"), render.PLOT_W + 5)])
+check("§7.3 the last point contributes no bar (60 intervals, 61 points)",
+      max(num(el, "x") for el in wet_bars) < 60 * STEP)
+check("§7.4 bar geometry is x = i * step + 0.5, width step - 1, flat and unrounded",
+      all(close(num(el, "x"), i * STEP + 0.5) for el, i in
+          zip(wet_bars, [i for i, mm in enumerate(rain_amounts) if mm > 0]))
+      and all("rx" not in el.attrib and "stroke" not in el.attrib and el.get("fill-opacity") is None
+              for el in wet_bars))
 
-dry_svg = render_svg(dry)
-dry_texts = texts(top(dry_svg))
-check("§7.6 all-zero drops the band for the centred dry text",
-      not any(el.get("fill-opacity") == "0.55" for el in by_tag(top(dry_svg), "path"))
-      and "mm/h" not in dry_svg
-      and any(text == "kein Niederschlag" and close(number(el, "x"), 409.0) and close(number(el, "y"), 341.0) for el, text in dry_texts),
-      str([t for _, t in dry_texts]))
+clipped = [el for el in wet_bars if close(num(el, "y"), 0.0)]
+overmax_text = [el for el in kids(wet_plot, "text") if close(num(el, "y"), 6.0)]
+chip = [el for el in wet_rects if el not in wet_bars]
+check("§7.5 a rate over 10 mm/h is clipped to the band top and its whole-mm value printed on it",
+      len(clipped) == 1 and close(num(clipped[0], "height"), 120.0)
+      and len(overmax_text) == 1 and overmax_text[0].text == "13"
+      and overmax_text[0].get("text-anchor") == "middle" and overmax_text[0].get("font-size") == "12"
+      and close(num(overmax_text[0], "x"), 33 * STEP + STEP / 2),
+      str([(el.text, num(el, "x")) for el in overmax_text]))
+check("§7.5 the value rides on a bar-coloured chip: 15.3 px of ink on an 11.2373 px bar",
+      len(chip) == 1 and chip[0].get("fill") == "#006edb"
+      and close(num(chip[0], "width"), 2 * 12 * 1303 / 2048 + 4)
+      and num(chip[0], "width") > STEP,
+      str(chip[0].attrib if chip else None))
+check("§7.5 the reference's own over-max value sits where ours does",
+      close(num(overmax_text[0], "x"),
+            num([el for el in kids(rows(REFERENCE_RAIN.read_text())[1][PLOT_ROW], "text") if close(num(el, "y"), 6.0)][0], "x")))
 
-for peak, wanted in ((0.3, "0.5 mm/h"), (3.0, "5 mm/h"), (30.0, "20 mm/h")):
-    check(f"§7.3 a {peak} mm/h peak is drawn against the {wanted} scale", f">{wanted}</text>" in render_svg(fixture(0.0, 1.0, 0.0, peak)))
-
-freezing_svg = render_svg(freezing)
-check("§7.7 sub-zero temperatures still draw precipitation (no snow switch)",
-      any(el.get("fill-opacity") == "0.55" for el in by_tag(top(freezing_svg), "path")) and "mm/h" in freezing_svg)
+nothing = series(yr_temps, [None] * 61)
+check("§7.6 no precipitation value draws no bar, exactly like a 0.0",
+      svg_of(nothing) == svg_of(series(yr_temps, [0.0] * 61))
+      and not kids(rows(svg_of(nothing))[1][PLOT_ROW], "rect"),
+      f"{len(kids(rows(svg_of(nothing))[1][PLOT_ROW], 'rect'))} bars")
+check("§7.7 sub-zero temperatures still draw precipitation: no snow switch",
+      len(kids(rows(svg_of(freezing))[1][PLOT_ROW], "rect")) == 60)
+check("§7.8 bars are discrete rects: nothing interpolates or smooths between them",
+      all(local(el.tag) == "rect" for el in wet_plot if el.get("fill") == "#006edb")
+      and len([el for el in kids(wet_plot, "path") if el.get("fill") == "none"]) == 1)
 
 
 # --------------------------------------------------------------- §8 stale
 
 
-stale_svg = render_svg(parity, stale=True, age_seconds=7 * 3600)
-stale_top = top(stale_svg)
-chip_rect = [el for el in by_tag(stale_top, "rect") if close(number(el, "x"), 704.0)]
-chip_dot = by_tag(stale_top, "circle")
-check("§8.2 the chip is 70x18 at (704,8), the dot 6 px at (712,17), the age at (720,21)",
-      len(chip_rect) == 1 and all(close(number(chip_rect[0], name), value) for name, value in (("x", 704.0), ("y", 8.0), ("width", 70.0), ("height", 18.0), ("rx", 3.0)))
+stale_svg = svg_of(parity, stale=True, age_seconds=7 * 3600)
+stale_root = ET.fromstring(stale_svg)
+chip_rect = [el for el in stale_root if local(el.tag) == "rect" and close(num(el, "x"), 670.2373)]
+chip_dot = [el for el in stale_root if local(el.tag) == "circle"]
+chip_text = [el for el in stale_root if local(el.tag) == "text"]
+check("§8.2 the chip is 94 x 18 at (670.2373, 186), right-aligned to the plot in the legend row",
+      len(chip_rect) == 1
+      and all(close(num(chip_rect[0], k), v) for k, v in
+              (("y", 186.0), ("width", 94.0), ("height", 18.0), ("rx", 3.0)))
       and chip_rect[0].get("fill-opacity") == "0.85"
-      and len(chip_dot) == 1 and close(number(chip_dot[0], "cx"), 712.0) and close(number(chip_dot[0], "cy"), 17.0) and close(number(chip_dot[0], "r"), 3.0)
-      and any(close(number(el, "x"), 720.0) and close(number(el, "y"), 21.0) and text == "vor 7 h" for el, text in texts(stale_top)),
-      f"rects={len(chip_rect)} dots={len(chip_dot)}")
-check("§8.2 the age reads hours up to 48, then days",
-      render.stale_label(7 * 3600) == "vor 7 h"
-      and render.stale_label(48 * 3600) == "vor 48 h"
-      and render.stale_label(72 * 3600) == "vor 3 Tagen",
-      f"{render.stale_label(7 * 3600)!r} {render.stale_label(48 * 3600)!r} {render.stale_label(72 * 3600)!r}")
-check("§8.4 the marker never moves anything: the stale SVG is the fresh one plus the chip",
+      and len(chip_dot) == 1 and close(num(chip_dot[0], "cx"), 678.2373) and close(num(chip_dot[0], "cy"), 195.0)
+      and close(num(chip_dot[0], "r"), 3.0)
+      and len(chip_text) == 1 and close(num(chip_text[0], "x"), 686.2373) and close(num(chip_text[0], "y"), 199.0)
+      and chip_text[0].text == "vor 7 h" and chip_text[0].get("font-size") == "12",
+      f"rects={len(chip_rect)} dots={len(chip_dot)} texts={len(chip_text)}")
+check("§8.2 the chip clears the legend, which ends at x = 254",
+      670.2373 > 254.0 and close(670.2373 + 94.0, 30 + render.PLOT_W))
+check("§8.2 the age reads hours up to 48, then days; the chip fits 'vor 3 Tagen'",
+      render.stale_label(7 * 3600) == "vor 7 h" and render.stale_label(48 * 3600) == "vor 48 h"
+      and render.stale_label(72 * 3600) == "vor 3 Tagen"
+      and 71.9 + 16 + 4 <= 94.0,
+      f"{render.stale_label(72 * 3600)!r}")
+check("§8.4 the chip moves nothing: the stale SVG is the fresh one plus the chip",
       stale_svg[:-6].startswith(parity_svg[:-6]) and len(stale_svg) > len(parity_svg),
       f"{len(stale_svg)}B vs {len(parity_svg)}B")
 
-no_data = render_svg([], fetched_at=None, last_error="met.no unreachable: timeout")
-check("§8.3 no cache draws the frame plus 'noch keine Daten' and the error",
-      "noch keine Daten" in no_data and "met.no unreachable" in no_data
-      and len(by_tag(top(no_data), "line")) == 3 and len(by_tag(top(no_data), "text")) == 2,
-      f"{len(by_tag(top(no_data), 'line'))} lines, {len(by_tag(top(no_data), 'text'))} texts")
+empty_svg = svg_of([], fetched_at=None, last_error="met.no unreachable: timeout")
+empty_root, empty_rows = rows(empty_svg)
+empty_plot = empty_rows[PLOT_ROW]
+empty_texts = [el.text for el in kids(empty_plot, "text")]
+check("§8.3 no cache draws the whole frame: grid, separators, both axes, hours, days, legend",
+      len(kids(empty_plot, "line")) == 72
+      and len(kids(empty_rows[HOUR_ROW], "text")) == 30
+      and len(kids(empty_rows[DAY_ROW], "text")) >= 2
+      and len([el for el in empty_plot if local(el.tag) == "g"]) == 2
+      and len(kids(empty_rows[LEGEND_ROW], "g")) == 2,
+      f"{len(kids(empty_plot, 'line'))} lines")
+check("§8.3 the °C axis falls back to 0..30 and the two texts are centred over the plot",
+      band_of(empty_plot) == (0.0, 3.0)
+      and "noch keine Daten" in empty_texts and "met.no unreachable: timeout" in empty_texts
+      and all(close(num(el, "x"), render.PLOT_W / 2) for el in kids(empty_plot, "text")
+              if (el.text or "").startswith(("noch", "met.no"))),
+      str(band_of(empty_plot)))
+check("§8.3 no curve, no bars, no icons, no fake data",
+      not kids(empty_plot, "path") and not kids(empty_plot, "rect")
+      and not [el for el in kids(empty_plot, "g") if "scale(0.24)" in (el.get("transform") or "")])
+check("§8.4 the empty state is the same canvas: no element moves, no row resizes",
+      empty_root.get("viewBox") == parity_root.get("viewBox")
+      and set(empty_rows) == set(parity_rows))
 
 
 # ------------------------------------------------------- §9 nothing extra
 
 
 check("§9.1 no wind of any kind", "wind" not in parity_svg.lower())
-check("§9.2 no attribution text (operator decision)",
-      all(word not in parity_svg.lower() for word in ("met.no", "norge", "nrk", "yr.no")))
-check("§9.5 weekday labels are German", sorted(text for _, text in midnight_labels) == ["Di", "Mo"])
+check("§9.2 no attribution, no header, no location line",
+      all(word not in parity_svg.lower() for word in ("met.no", "nrk", "yr.no", "norge")))
+check("§9.3 no moon phase and no dark-mode tint: night is the art's job",
+      "moon" not in parity_svg.lower()
+      and [el.get("fill") for el in icons] == [el.get("fill") for el in
+           [e for e in kids(dark_plot, "g") if "scale(0.24)" in (e.get("transform") or "")]])
+check("§9.4 no now marker and no interaction: it is an image",
+      not any(local(el.tag) in ("a", "title", "script") for el in parity_root.iter())
+      and "onclick" not in parity_svg and "pointer" not in parity_svg)
+check("§9.6 no shadow, no glow, no rounded plot corner: the one gradient is the curve's",
+      all(word not in CHROME for word in ("filter", "feGaussian", "drop-shadow"))
+      and CHROME.count('fill-opacity') == 0 and len(gradients) == 1)
+check("§9.7 no 'kein Niederschlag': the empty rain row on a fixed axis says it",
+      "kein Niederschlag" not in svg_of(series(yr_temps, [0.0] * 61)))
+check("§9.5 the labels are German", [el.text for el in day_labels][0].startswith("So ")
+      and all(word in parity_svg for word in ("Temperatur", "Niederschlag")))
 
 
 # ---------------------------------------------------------- determinism
 
 
-check("§10 same input -> byte-identical PNG",
-      render_bytes(parity) == render_bytes(parity) and render_bytes(dry) == render_bytes(dry))
+check("§10 same input -> byte-identical PNG", png_of(parity) == png_of(parity) and png_of(wet) == png_of(wet))
+check("§10 the defaults are 794 px, light, 60 h, 24 px icons, 0..10 mm",
+      (render.DEFAULT_WIDTH, render.WINDOW_HOURS, render.ICON_BOX, render.MM_MAX, render.PX_PER_MM)
+      == (794, 60, 24.0, 10.0, 12.0))
 
 
 # ------------------------------------------------------------------ report
