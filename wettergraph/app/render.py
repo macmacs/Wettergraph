@@ -1,21 +1,33 @@
 #!/usr/bin/env python3
-"""Render the Wettergraph image (ticket 05).
+"""Render the Wettergraph image (redesign ticket 05).
 
-One render is one SVG built in the spec's design units (W0 = 782 x 391), scaled
-by k = W / 782 as each number is written, then rasterised by ``resvg-py``. No
-browser, no headless Chrome. The font is loaded by file path, never by font
-discovery, because resvg draws every text node as nothing when no font answers
-and reports no error (``assets/graph-spec.md`` §3.4).
+The graph is a clone of yr's meteogram with the wind band and the yr/NRK header
+removed. Every number here is cloned, not designed: ``assets/graph-spec.md``
+§0 lists each constant with its source in yr's own file, and the clause numbers
+cited below are that spec's.
+
+One render is one SVG drawn in the design canvas ``794.2373 x 210`` (§3.1) and
+published at ``W x round(W * 210 / 794.2373)`` (§1.1). The scaling of §1.2 is
+expressed once, as the ``viewBox``, instead of multiplied into every number:
+that is exactly what ticket 04 measured the width range through, it keeps the
+SVG crisp for the browser that now rescales it on the dashboard, and it makes a
+clause-by-clause diff against ``graph-reference-v2.svg`` a direct comparison of
+coordinates. ``preserveAspectRatio="none"`` so the canvas fills the intrinsic
+box exactly and §1.4's opacity holds to the last row of pixels.
+
+The PNG routes rasterise the same SVG through ``resvg-py``. No browser. The
+font is loaded by file path, never by font discovery, because resvg draws every
+text node as nothing when no font answers and reports no error (§3.4).
 
 Input is the normalised series from :mod:`metno` - ``ForecastCache.view()``:
-``samples``, ``fetched_at``, ``stale``, ``age_seconds``, ``last_error``. Output
-matches ``assets/graph-spec.md`` clause for clause; the clause numbers are cited
-at each decision below.
+``samples``, ``fetched_at``, ``stale``, ``age_seconds``, ``last_error``. The
+window is 60 h from the *render* hour, so its tail runs past met.no's hourly
+entries on any render made after the poll; §4.8 interpolates it.
 
-``show_age=True`` (ticket 06) draws the §8.2 age chip even when the data is
-fresh, with minutes instead of hours under one hour. It is a debug switch -
-§9.4 keeps the clock off the image otherwise - so a dashboard can be watched
-proving it refreshes on its own.
+``show_age=True`` (previous map's ticket 06) draws the §8.2 age chip even when
+the data is fresh, with minutes instead of hours under one hour. It is a debug
+switch - §9.4 keeps the clock off the image otherwise - so a dashboard can be
+watched proving it refreshes on its own.
 
 Local check (needs the font file; this dev box has no fonts in the usual path)::
 
@@ -26,6 +38,7 @@ Local check (needs the font file; this dev box has no fonts in the usual path)::
 from __future__ import annotations
 
 import argparse
+import bisect
 import functools
 import html
 import json
@@ -38,89 +51,119 @@ from pathlib import Path
 
 import resvg_py
 
-DESIGN_WIDTH = 782.0  # §1.1 design width; every number in the spec is stated here
-DESIGN_HEIGHT = 391.0
-DEFAULT_WIDTH = 782
-MIN_WIDTH = 480  # §1.2
-MAX_WIDTH = 1564
+# ------------------------------------------------------------ §0 constants
 
-PADDING = 8.0  # §3.1
-GUTTER = 36.0  # §3.2
-CONTENT_LEFT = PADDING + GUTTER  # 44
-CONTENT_RIGHT = DESIGN_WIDTH - PADDING  # 774
-CONTENT_WIDTH = CONTENT_RIGHT - CONTENT_LEFT  # 730
+STEP = 722.0 / 59.0  # 12.2373 px per hour: yr's 722 px plot over 59 intervals
+WINDOW_HOURS = 60  # §4.1
+WINDOW_POINTS = WINDOW_HOURS + 1  # 61
+PLOT_W = WINDOW_HOURS * STEP  # 734.2373
+PLOT_H = 120.0
+GUTTER = 30.0  # §3.2, both sides
+DESIGN_WIDTH = GUTTER + PLOT_W + GUTTER  # 794.2373 (§3.1)
+DESIGN_HEIGHT = 210.0
 
-TEMP_TOP = 8.0  # §3.3
-TEMP_BOTTOM = 283.0
-TEMP_HEIGHT = TEMP_BOTTOM - TEMP_TOP  # 275
-PRECIP_TOP = 291.0
-PRECIP_BOTTOM = 383.0
-PRECIP_HEIGHT = PRECIP_BOTTOM - PRECIP_TOP  # 92
-PRECIP_MID = (PRECIP_TOP + PRECIP_BOTTOM) / 2.0
-PRECIP_LABEL_X = 48.0  # §7.4
-PRECIP_LABEL_Y = 299.0
+DEFAULT_WIDTH = 794  # §10
+MIN_WIDTH = 560  # §1.2, measured in ticket 04
+MAX_WIDTH = 1588
 
-WINDOW_HOURS = 48  # §4.1
-WINDOW_POINTS = WINDOW_HOURS + 1  # 49 hourly samples
-TIME_GRID_HOURS = 6  # §4.3
-ICON_EVERY_HOURS = 3  # §6.1
-ICON_BOX = 28.0  # §6.2
-ICON_CLEARANCE = 3.0  # §6.3
-PRECIP_STEPS = (0.5, 1.0, 2.0, 5.0, 10.0, 20.0)  # §7.3
-AXIS_FONT = 11.0  # §3.4
-WEEKDAY_FONT = 12.0
-AXIS_LABEL_X = 38.0  # §3.5, right-aligned
-WEEKDAY_BASELINE = 280.0  # §4.4
-TEMP_STEP = 5.0  # §5.1
-STALE_MAX_HOURS = 48  # §8.2
-CHIP_X = 704.0
-CHIP_Y = 8.0
-CHIP_WIDTH = 70.0
+ROW_DAY = 8.0  # §3.3: 8 margin, 24 day, 24 hour, 120 plot, 10 gap, 18 legend, 6
+ROW_HOUR = 32.0
+ROW_PLOT = 56.0
+ROW_LEGEND = 186.0
+
+GRID_DY = 12.0  # §4.3 horizontal cell grid
+LABEL_DY = 24.0  # §3.5 axis label pitch, every second grid line
+PX_PER_MM = 12.0  # §7.2, fixed 0..10 mm over the 120 px band
+MM_MAX = 10.0
+BAR_INSET = 0.5  # §7.4: x = i * STEP + 0.5, width = STEP - 1
+BAR_WIDTH = STEP - 2 * BAR_INSET
+
+CURVE_STROKE = 2.0  # §5.3
+TEMP_LADDER = (1.0, 2.0, 3.0, 5.0, 10.0)  # §5.1 degrees per grid row
+TEMP_ROWS = 10
+ICON_BOX = 24.0  # §6.2
+ICON_CLEARANCE = 5.0  # §6.3
+ICON_HEADROOM = ICON_BOX + ICON_CLEARANCE  # 29 px reserved by the ladder (§5.1)
+ICON_SAMPLES = 25  # the 24 px box, sampled every px, plus its right edge
+EMPTY_BAND = (0.0, 3.0)  # §8.3 fallback band: 0..30, r = 3
+
+DAY_LABEL_MIN_HOURS = 6.5  # §4.6
+HOUR_LABEL_EVERY = 2  # §4.7
+ICON_EVERY_HOURS = 2  # §6.1
+
+F_DAY = 16.0  # §0 font sizes: yr's rem values at a 15 px root
+F_SMALL = 13.0
+F_OVERMAX = 12.0
+DIGIT_ADVANCE = 1303.0 / 2048.0  # DejaVu Sans digit advance, for §7.5's chip
+
+LEGEND_ENTRIES = (0.0, 126.0)  # §3.7, yr's own offsets minus the wind entry
+SWATCH = 10.0
+
+CHIP_WIDTH = 94.0  # §8.2
 CHIP_HEIGHT = 18.0
 CHIP_RADIUS = 3.0
-DOT_X = 712.0
-DOT_Y = 17.0
-DOT_RADIUS = 3.0
-CHIP_TEXT_X = 720.0
-CHIP_TEXT_Y = 21.0
+CHIP_X = GUTTER + PLOT_W - CHIP_WIDTH  # 670.2373, right-aligned to the plot
+CHIP_Y = ROW_LEGEND
+STALE_MAX_HOURS = 48
 
 WEEKDAYS = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")  # §4.5
-SEGMENT_SAMPLES = 32  # spline samples per hour, used to find an icon's highest curve point
 
-# §2.3, light and dark. Same geometry, only the palette changes (§2.1).
+# §2.3, light and dark. Same geometry, only the palette changes (§2.1) - which
+# is yr's own arrangement: ?mode=dark moves six fills and two gradient stops.
 PALETTES = {
     "light": {
         "background": "#ffffff",
-        "grid": "#dfe3e8",
-        "zero": "#b9c0c8",
-        "baseline": "#c8cfd7",
-        "midnight": "#aab2bb",
-        "text": "#4a5158",
-        "curve": "#d81e05",
-        "precip": "#4a7fd4",
-        "stale": "#b45309",
+        "grid": "#c3d0d8",
+        "separator": "#56616c",
+        "day": "#21292b",
+        "muted": "#56616c",
+        "warm": "#c60000",
+        "cold": "#006edb",
+        "rain": "#006edb",
+        "overmax": "#ffffff",
     },
     "dark": {
-        "background": "#171a1f",
-        "grid": "#333a42",
-        "zero": "#5b6570",
-        "baseline": "#454d57",
-        "midnight": "#5b6570",
-        "text": "#c3c9d1",
-        "curve": "#ff6a4d",
-        "precip": "#6fa8ff",
-        "stale": "#fbbf24",
+        "background": "#020a14",
+        "grid": "#374759",
+        "separator": "#c3d0d8",  # the hex light mode uses for its *grid*
+        "day": "#ffffff",
+        "muted": "#a2a5b3",
+        "warm": "#ff2d3f",
+        "cold": "#00b8f1",
+        "rain": "#00b8f1",
+        "overmax": "#21292b",  # inverts: it is drawn on the bar, not the ground
     },
 }
+
+# §3.5: yr's own 24 px glyphs, lifted from meteogram-6325496.svg. yr tints them
+# with a CSS filter; we set the fill directly, because resvg does no filter
+# functions. Nothing reads yr.no at runtime - this is the art, not a fetch.
+THERMOMETER = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">'
+    '<circle cx="12" cy="18" r="1.25" stroke="COLOUR" stroke-width="1.5"/>'
+    '<path stroke="COLOUR" stroke-width="1.5" d="M12 17V8m0-5a3 3 0 0 0-3 3v9.354a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3z"/>'
+    "</svg>"
+)
+DROPLET = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">'
+    '<path fill="COLOUR" d="M2.04 12l-.747-.06.748.06zm19.92 0l.747-.06-.748.06zm-6.546 10.086l-.53-.53.53.53z'
+    'm-2.828 0l-.53.53.53-.53zM2.788 12.062C3.221 6.78 7.235 2.75 12 2.75v-1.5c-5.668 0-10.221 4.757-10.707 '
+    '10.69l1.495.122zM12 2.75c4.765 0 8.78 4.03 9.212 9.312l1.495-.123C22.22 6.007 17.668 1.25 12 1.25v1.5zm9 '
+    '9.5H3v1.5h18v-1.5zm-19.707-.31c-.084 1.027.758 1.81 1.707 1.81v-1.5a.231.231 0 0 1-.166-.067.15.15 0 0 '
+    '1-.046-.121l-1.495-.123zm19.919.122a.15.15 0 0 1-.046.121.231.231 0 0 1-.166.067v1.5c.949 0 1.79-.783 '
+    '1.707-1.81l-1.495.122zM11.25 13v7.672h1.5V13h-1.5zm4.694 9.616l.586-.586-1.06-1.06-.586.585 1.06 1.061zm-3.889 '
+    '0a2.75 2.75 0 0 0 3.89 0l-1.061-1.06a1.25 1.25 0 0 1-1.768 0l-1.06 1.06zm-.805-1.944c0 .729.29 1.428.805 '
+    '1.944l1.061-1.06a1.25 1.25 0 0 1-.366-.884h-1.5z"/></svg>'
+)
 
 ICONS_DIR = Path(os.environ.get("WG_ICONS", Path(__file__).resolve().parent / "icons"))
 # §3.4: the container path. WG_FONT exists so a box without fonts can still
 # render a check (this development box has none at the container's path).
 FONT_PATH = Path(os.environ.get("WG_FONT", "/usr/share/fonts/dejavu/DejaVuSans.ttf"))
 # The family written into every text node. resvg matches the first name against
-# the file above and never reaches the rest, so the PNG is unchanged; the names
-# after it are for a browser showing /image/graph.svg directly, where the file
-# path means nothing and the viewer's own fonts decide (redesign ticket 00).
+# the file above and never reaches the rest; the names after it are for a
+# browser shown the SVG itself, which is now the normal case - the card loads
+# the SVG, not the PNG (redesign ticket 00).
 FONT_STACK = "DejaVu Sans, Verdana, sans-serif"
 
 _font_warned = False
@@ -130,7 +173,7 @@ _font_warned = False
 
 
 def clamp_width(width) -> int:
-    """§1.2: clamp 480..1564, never refuse. Non-numeric falls back to 782."""
+    """§1.2: clamp 560..1588, never refuse. Non-numeric falls back to 794."""
     try:
         value = int(round(float(width)))
     except (TypeError, ValueError):
@@ -138,20 +181,15 @@ def clamp_width(width) -> int:
     return max(MIN_WIDTH, min(MAX_WIDTH, value))
 
 
-def _px(value: float, k: float) -> float:
-    """Design units -> output pixels: multiply by k, round to 0.1 px."""
-    return round(float(value) * k, 1)
+def height_for(width: int) -> int:
+    """§1.1/§1.3: the height follows the design canvas, it is never set."""
+    return round(width * DESIGN_HEIGHT / DESIGN_WIDTH)
 
 
 def _n(value: float) -> str:
     """A number as SVG text, deterministic and without trailing zeros."""
     text = f"{float(value):.4f}".rstrip("0").rstrip(".")
     return text if text not in ("", "-0") else "0"
-
-
-def _p(value: float, k: float) -> str:
-    """A path coordinate: one decimal, like the reference SVG."""
-    return f"{_px(value, k):.1f}"
 
 
 def _epoch(iso) -> int | None:
@@ -166,69 +204,123 @@ def _epoch(iso) -> int | None:
     return int(moment.timestamp())
 
 
-def window_slots(samples, fetched_at=None, now=None) -> tuple[int, list[tuple[int, dict | None]]]:
-    """The 49 hourly slots of §4.1, keyed by epoch, with the window start.
+def _blend(before, after, fraction: float):
+    """§4.8: linear between the two entries, or nothing if either is missing."""
+    if before is None or after is None:
+        return None
+    return float(before) + (float(after) - float(before)) * fraction
 
-    The window starts at the hour of the fetch. If met.no's series begins later
-    than that hour (fetched just before an hour boundary), the window starts at
-    the first sample instead, so the left edge is never a hole.
+
+def window_slots(samples, fetched_at=None, now=None) -> tuple[int, list[tuple[int, dict | None]]]:
+    """§4.1/§4.8: the 61 hourly slots, keyed by epoch, with the window start.
+
+    The window starts at the hour of the **render**, not of the fetch, so its
+    tail runs past met.no's hourly entries on any render made an hour or more
+    after the last poll. That is the normal case: a slot with no entry of its
+    own is interpolated from the entries either side (the payload carries
+    6-hourly ones out to ten days), and its symbol comes from the entry
+    covering it. A slot outside the payload altogether stays a gap.
     """
-    if fetched_at is None:
-        fetched_at = now if now is not None else time.time()
-    start = int(float(fetched_at) // 3600) * 3600
-    by_time: dict[int, dict] = {}
-    first: int | None = None
+    anchor = now if now is not None else (fetched_at if fetched_at is not None else time.time())
+    start = int(float(anchor) // 3600) * 3600
+
+    entries: list[tuple[int, dict]] = []
     for sample in samples or []:
         moment = _epoch((sample or {}).get("time"))
-        if moment is None:
+        if moment is not None:
+            entries.append((moment, sample))
+    entries.sort(key=lambda item: item[0])
+    times = [moment for moment, _ in entries]
+
+    slots: list[tuple[int, dict | None]] = []
+    for i in range(WINDOW_POINTS):
+        moment = start + i * 3600
+        index = bisect.bisect_left(times, moment)
+        if index < len(times) and times[index] == moment:
+            slots.append((moment, entries[index][1]))
             continue
-        by_time[moment] = sample
-        if first is None or moment < first:
-            first = moment
-    if first is not None and first > start:
-        start = first
-    return start, [(start + i * 3600, by_time.get(start + i * 3600)) for i in range(WINDOW_POINTS)]
+        if index == 0 or index >= len(times):
+            slots.append((moment, None))  # outside the payload: a gap (§4.8)
+            continue
+        before, after = entries[index - 1][1], entries[index][1]
+        fraction = (moment - times[index - 1]) / (times[index] - times[index - 1])
+        slots.append(
+            (
+                moment,
+                {
+                    "time": datetime.fromtimestamp(moment, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "temperature": _blend(before.get("temperature"), after.get("temperature"), fraction),
+                    "precipitation": _blend(before.get("precipitation"), after.get("precipitation"), fraction),
+                    "symbol_code": before.get("symbol_code"),
+                    "interpolated": True,
+                },
+            )
+        )
+    return start, slots
+
+
+def temperature_band(temperatures) -> tuple[float, float]:
+    """§5.1: the first ladder step that leaves 29 px of icon headroom.
+
+    Returns ``(bottom, r)``: the band is always 120 px and ten rows, so the top
+    is ``bottom + 10 * r`` and the scale is ``12 / r`` px per degree.
+    """
+    if not temperatures:
+        return EMPTY_BAND
+    low, high = min(temperatures), max(temperatures)
+    for r in TEMP_LADDER:
+        bottom = math.floor(low / r) * r
+        top = bottom + TEMP_ROWS * r
+        if (top - high) * (GRID_DY / r) >= ICON_HEADROOM:
+            return bottom, r
+    r = TEMP_LADDER[-1]  # §5.1: nothing fits, the icons clamp (§6.3)
+    return math.floor(low / r) * r, r
 
 
 # ------------------------------------------------------------------- spline
 
 
-def _bezier_segments(points: list[tuple[float, float]]):
-    """Catmull-Rom through the points, tension 0.5, as cubic Béziers (§5.2).
-
-    Uniform form: C1 = P_i + (P_i+1 - P_i-1)/6, C2 = P_i+1 - (P_i+2 - P_i)/6.
-    The ends duplicate their neighbour, so the curve starts and stops at the
-    window edges.
-    """
-    segments = []
-    count = len(points)
-    for i in range(count - 1):
-        p0, p1 = points[i], points[i + 1]
-        before = points[i - 1] if i > 0 else p0
-        after = points[i + 2] if i + 2 < count else p1
-        c1 = (p0[0] + (p1[0] - before[0]) / 6.0, p0[1] + (p1[1] - before[1]) / 6.0)
-        c2 = (p1[0] - (after[0] - p0[0]) / 6.0, p1[1] - (after[1] - p0[1]) / 6.0)
-        segments.append((p0, c1, c2, p1))
-    return segments
+def _controls(points: list[tuple[float, float]], k: int):
+    """yr's smoothing: Catmull-Rom to cubic Bézier, tension 1/6, ends
+    duplicated (§0, §4.2). Verified against yr's first two segments."""
+    p0 = points[k - 1] if k > 0 else points[0]
+    p1, p2 = points[k], points[k + 1]
+    p3 = points[k + 2] if k + 2 < len(points) else points[-1]
+    c1 = (p1[0] + (p2[0] - p0[0]) / 6.0, p1[1] + (p2[1] - p0[1]) / 6.0)
+    c2 = (p2[0] - (p3[0] - p1[0]) / 6.0, p2[1] - (p3[1] - p1[1]) / 6.0)
+    return p1, c1, c2, p2
 
 
-def _bezier_at(segment, t: float) -> tuple[float, float]:
-    p0, c1, c2, p1 = segment
-    mt = 1.0 - t
-    a, b, c, d = mt * mt * mt, 3 * mt * mt * t, 3 * mt * t * t, t * t * t
-    return (
-        a * p0[0] + b * c1[0] + c * c2[0] + d * p1[0],
-        a * p0[1] + b * c1[1] + c * c2[1] + d * p1[1],
-    )
+def _curve_path(points: list[tuple[float, float]]) -> str:
+    out = [f"M{_n(points[0][0])} {_n(points[0][1])}"]
+    for k in range(len(points) - 1):
+        _, c1, c2, p2 = _controls(points, k)
+        out.append(f"C{_n(c1[0])} {_n(c1[1])}, {_n(c2[0])} {_n(c2[1])}, {_n(p2[0])} {_n(p2[1])}")
+    return "".join(out)
 
 
-def _runs(points: list[tuple[int, float, float]]) -> list[list[tuple[int, float, float]]]:
-    """Split the hourly points into runs of consecutive hours, so a gap in the
-    series breaks the curve instead of joining across it."""
+def _curve_y(points: list[tuple[float, float]], x: float) -> float:
+    """The curve's height at x, sampled off the same spline the path draws."""
+    k = max(0, min(int((x - points[0][0]) / STEP), len(points) - 2))
+    p1, c1, c2, p2 = _controls(points, k)
+    best = None
+    for q in range(101):
+        t = q / 100.0
+        u = 1.0 - t
+        xx = u**3 * p1[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t**3 * p2[0]
+        yy = u**3 * p1[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t**3 * p2[1]
+        if best is None or abs(xx - x) < best[0]:
+            best = (abs(xx - x), yy)
+    return best[1]
+
+
+def _runs(readings: list[tuple[int, float, float]]) -> list[list[tuple[int, float, float]]]:
+    """Split the points into runs of consecutive hours, so a §4.8 gap breaks
+    the curve instead of joining across it."""
     runs: list[list[tuple[int, float, float]]] = []
     run: list[tuple[int, float, float]] = []
     previous = None
-    for item in points:
+    for item in readings:
         if previous is not None and item[0] == previous + 1:
             run.append(item)
         else:
@@ -246,7 +338,7 @@ def _runs(points: list[tuple[int, float, float]]) -> list[list[tuple[int, float,
 
 @functools.lru_cache(maxsize=8)
 def _icon_index(icons_dir: str) -> dict[str, str]:
-    """``symbol_code`` -> icon file name, from ticket 03's ``index.json``."""
+    """``symbol_code`` -> icon file name, from the previous map's ``index.json``."""
     try:
         document = json.loads((Path(icons_dir) / "index.json").read_text())
     except (OSError, json.JSONDecodeError):
@@ -295,12 +387,10 @@ def _prefix_ids(text: str, prefix: str) -> str:
     return _HREF.sub(lambda m: f'href="#{prefix}{m.group(1)}"', text)
 
 
-def _inline_icon(text: str, prefix: str, x: float, y: float, scale: float) -> str:
+def _inline_icon(text: str, prefix: str, x: float, y: float) -> str:
+    """§6.2: the art is a 100-unit square, so a 24 px box is scale(0.24)."""
     inner = _prefix_ids(_inner_svg(text), prefix)
-    return (
-        f'<g transform="translate({_n(x)} {_n(y)}) scale({_n(scale)})">'
-        f"{inner}</g>"
-    )
+    return f'<g transform="translate({_n(x)} {_n(y)}) scale({_n(ICON_BOX / 100.0)})">{inner}</g>'
 
 
 # ------------------------------------------------------------------- stale
@@ -319,8 +409,7 @@ def stale_label(age_seconds) -> str:
 def age_label(age_seconds) -> str:
     """The same chip while the data is fresh: §8.2's wording, minutes first.
 
-    Only reached with ``show_age=True``; a fresh graph is drawn without any
-    chip by default.
+    Only reached with ``show_age=True``; a fresh graph carries no chip.
     """
     age = max(0.0, float(age_seconds or 0.0))
     if age < 3600:
@@ -329,16 +418,6 @@ def age_label(age_seconds) -> str:
 
 
 # --------------------------------------------------------------------- svg
-
-
-def _document(width: int, height: int, body: list[str]) -> str:
-    return (
-        '<svg xmlns="http://www.w3.org/2000/svg" '
-        'xmlns:xlink="http://www.w3.org/1999/xlink" '
-        f'width="{width}" height="{height}" viewBox="0 0 {width} {height}">'
-        + "".join(body)
-        + "</svg>"
-    )
 
 
 def build_svg(
@@ -356,192 +435,219 @@ def build_svg(
 ) -> str:
     """The whole image as one SVG. Deterministic for the same arguments."""
     width = clamp_width(width)
-    height = round(width / 2)  # §1.3
-    k = width / DESIGN_WIDTH
+    height = height_for(width)
     palette = PALETTES.get(str(theme), PALETTES["light"])  # §2.2 unknown -> light
     icons_dir = Path(icons_dir) if icons_dir is not None else ICONS_DIR
-    _, slots = window_slots(samples, fetched_at, now)
+    start, slots = window_slots(samples, fetched_at, now)
 
-    body: list[str] = []
-
-    def line(x1, y1, x2, y2, colour, stroke_width=1.0) -> None:
-        body.append(
-            f'<line x1="{_n(_px(x1, k))}" y1="{_n(_px(y1, k))}"'
-            f' x2="{_n(_px(x2, k))}" y2="{_n(_px(y2, k))}"'
-            f' stroke="{colour}" stroke-width="{_n(_px(stroke_width, k))}"/>'
-        )
-
-    def text(x, y, value, *, size, colour, anchor=None) -> None:
-        extra = f' text-anchor="{anchor}"' if anchor else ""
-        body.append(
-            f'<text x="{_n(_px(x, k))}" y="{_n(_px(y, k))}"'
-            f' font-family="{FONT_STACK}" font-size="{_n(_px(size, k))}"{extra}'
-            f' fill="{colour}">{html.escape(str(value))}</text>'
-        )
-
-    # Background: opaque, no rounded corners, no frame of its own (§1.4).
-    body.append(f'<rect width="{width}" height="{height}" fill="{palette["background"]}"/>')
-
-    # §8.3: nothing was ever fetched. Background, axis frame, the text.
-    if not any(slot and slot.get("temperature") is not None for _, slot in slots):
-        line(CONTENT_LEFT, TEMP_TOP, CONTENT_RIGHT, TEMP_TOP, palette["grid"])
-        line(CONTENT_LEFT, TEMP_BOTTOM, CONTENT_RIGHT, TEMP_BOTTOM, palette["grid"])
-        line(CONTENT_LEFT, PRECIP_BOTTOM, CONTENT_RIGHT, PRECIP_BOTTOM, palette["baseline"])
-        text(DESIGN_WIDTH / 2, DESIGN_HEIGHT / 2 + 4, "noch keine Daten", size=WEEKDAY_FONT, colour=palette["text"], anchor="middle")
-        if last_error:
-            text(DESIGN_WIDTH / 2, DESIGN_HEIGHT / 2 + 22, str(last_error)[:90], size=AXIS_FONT, colour=palette["text"], anchor="middle")
-        return _document(width, height, body)
-
-    readings = [(i, slot) for i, (_, slot) in enumerate(slots) if slot and slot.get("temperature") is not None]
-    temperatures = [float(slot["temperature"]) for _, slot in readings]
-    axis_bottom = math.floor(min(temperatures) / TEMP_STEP) * TEMP_STEP  # §5.1
-    axis_high = math.ceil(max(temperatures) / TEMP_STEP) * TEMP_STEP
-    axis_top = axis_high + TEMP_STEP  # one reserved step for the icon row
-    span = axis_top - axis_bottom
-
-    def y_temp(value: float) -> float:
-        return TEMP_TOP + (axis_top - value) * TEMP_HEIGHT / span
-
-    points = [  # (hour, x, y) for the curve
-        (i, CONTENT_LEFT + CONTENT_WIDTH * i / WINDOW_HOURS, y_temp(float(slot["temperature"])))
-        for i, slot in readings
+    out: list[str] = [
+        '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"'
+        f' width="{width}" height="{height}" viewBox="0 0 {_n(DESIGN_WIDTH)} {_n(DESIGN_HEIGHT)}"'
+        ' preserveAspectRatio="none">',
+        # §1.4: opaque, no rounded corners, no border of its own. The card frames it.
+        f'<rect x="0" y="0" width="{_n(DESIGN_WIDTH)}" height="{_n(DESIGN_HEIGHT)}" fill="{palette["background"]}"/>',
     ]
 
-    # §5.4 every 5 °C step, labelled; §5.5 the 0 °C line is heavier.
-    axis_values = [axis_bottom + step * TEMP_STEP for step in range(int(round(span / TEMP_STEP)) + 1)]
-    for value in axis_values:
-        heavy = value == 0
-        line(
-            CONTENT_LEFT, y_temp(value), CONTENT_RIGHT, y_temp(value),
-            palette["zero"] if heavy else palette["grid"],
-            1.5 if heavy else 1.0,
+    def text(x, y, value, *, size, colour, anchor=None, weight=None) -> str:
+        extra = f' text-anchor="{anchor}"' if anchor else ""
+        extra += f' font-weight="{_n(weight)}"' if weight else ""
+        return (
+            f'<text x="{_n(x)}" y="{_n(y)}" dy="0.35em" font-family="{FONT_STACK}"'
+            f' font-size="{_n(size)}"{extra} fill="{colour}">{html.escape(str(value))}</text>'
         )
 
-    # §4.3 a vertical grid line every 6 h; the edges are panel borders, not lines.
-    for hour in range(TIME_GRID_HOURS, WINDOW_HOURS, TIME_GRID_HOURS):
-        x = CONTENT_LEFT + CONTENT_WIDTH * hour / WINDOW_HOURS
-        line(x, TEMP_TOP, x, TEMP_BOTTOM, palette["grid"])
+    locals_ = [datetime.fromtimestamp(moment).astimezone() for moment, _ in slots]
 
-    # §4.4 local midnights: heavier line plus the short weekday name.
-    midnights: list[tuple[float, str]] = []
-    for i, (moment, _) in enumerate(slots):
-        local = datetime.fromtimestamp(moment).astimezone()
-        if local.hour == 0 and local.minute == 0:
-            x = CONTENT_LEFT + CONTENT_WIDTH * i / WINDOW_HOURS
-            midnights.append((x, WEEKDAYS[local.weekday()]))
-            line(x, TEMP_TOP, x, TEMP_BOTTOM, palette["midnight"], 1.5)
-
-    # §5.2-§5.3 the curve: Catmull-Rom, 2.5 px, round caps, no fill, no markers.
-    dense: list[tuple[float, float]] = []
-    for run in _runs(points):
-        run_points = [(x, y) for _, x, y in run]
-        if len(run_points) == 1:
-            dense.append(run_points[0])
+    # §4.5/§4.6 day labels: the window's opening hour, then every local
+    # midnight; dropped where fewer than 6.5 h remain before the next boundary
+    # or the window end, which is the no-overlap and no-clip condition at both
+    # edges (a label is 69-76 px of ink, 6.5 h is 79.5 px).
+    boundaries = [0] + [i for i, moment in enumerate(locals_) if i and moment.hour == 0]
+    out.append(f'<g transform="translate({_n(GUTTER)} {_n(ROW_DAY)})">')
+    for position, i in enumerate(boundaries):
+        following = boundaries[position + 1] if position + 1 < len(boundaries) else WINDOW_HOURS
+        if following - i < DAY_LABEL_MIN_HOURS:
             continue
-        segments = _bezier_segments(run_points)
-        path = f"M {_p(run_points[0][0], k)} {_p(run_points[0][1], k)}"
-        for segment in segments:
-            p0, c1, c2, p1 = segment
-            path += (
-                f" C {_p(c1[0], k)} {_p(c1[1], k)} {_p(c2[0], k)} {_p(c2[1], k)}"
-                f" {_p(p1[0], k)} {_p(p1[1], k)}"
-            )
-        body.append(
-            f'<path d="{path}" fill="none" stroke="{palette["curve"]}"'
-            f' stroke-width="{_n(_px(2.5, k))}" stroke-linecap="round" stroke-linejoin="round"/>'
-        )
-        for segment in segments:
-            for step in range(SEGMENT_SAMPLES + 1):
-                dense.append(_bezier_at(segment, step / SEGMENT_SAMPLES))
+        moment = locals_[i]
+        label = f"{WEEKDAYS[moment.weekday()]} {moment.day:02d}.{moment.month:02d}."
+        out.append(text(i * STEP, 12, label, size=F_DAY, colour=palette["day"], weight=600))
+    out.append("</g>")
 
-    # §6 icons: one every 3 h, in a 28 px box riding 3 px above the highest
-    # curve point under it, clamped to the temperature panel.
-    for hour in range(0, WINDOW_HOURS, ICON_EVERY_HOURS):
-        slot = slots[hour][1]
+    # §4.7 hour labels, every even point index except the last: the final
+    # point's label would sit on the mm axis.
+    out.append(f'<g transform="translate({_n(GUTTER)} {_n(ROW_HOUR)})">')
+    for i in range(0, WINDOW_HOURS, HOUR_LABEL_EVERY):
+        out.append(
+            text(i * STEP, 9, f"{locals_[i].hour:02d}", size=F_SMALL, colour=palette["muted"], anchor="middle")
+        )
+    out.append("</g>")
+
+    # ---------------------------------------------------------- the one band
+    out.append(f'<g transform="translate({_n(GUTTER)} {_n(ROW_PLOT)})">')
+
+    # §4.3 the cell grid, behind everything: 11 horizontal lines, one vertical
+    # per point. §4.4 a local midnight replaces its grid line with a separator,
+    # it does not add one. The outermost grid lines are the frame.
+    for row in range(int(PLOT_H // GRID_DY) + 1):
+        y = row * GRID_DY
+        out.append(f'<line x1="0" x2="{_n(PLOT_W)}" y1="{_n(y)}" y2="{_n(y)}" stroke="{palette["grid"]}"/>')
+    midnights = set(boundaries[1:])
+    for i in range(WINDOW_POINTS):
+        x = _n(i * STEP)
+        colour = palette["separator"] if i in midnights else palette["grid"]
+        out.append(f'<line x1="{x}" x2="{x}" y1="0" y2="{_n(PLOT_H)}" stroke="{colour}"/>')
+
+    readings = [
+        (i, i * STEP, float(slot["temperature"]))
+        for i, (_, slot) in enumerate(slots)
+        if slot and slot.get("temperature") is not None
+    ]
+    bottom, degrees_per_row = temperature_band([value for _, _, value in readings])
+    per_degree = GRID_DY / degrees_per_row  # §5.1
+
+    def y_temp(value: float) -> float:
+        return PLOT_H - (value - bottom) * per_degree
+
+    # §3.5 the two axis gutters, each label centred on its grid line. §3.6: a
+    # band bottom at -10 °C or below drops the degree sign from every label of
+    # this render, because "-10°" is 27.7 px and would clip the canvas edge.
+    degree_sign = "" if bottom <= -10 else "°"
+    out.append(f'<g transform="translate(-17, -6) scale(0.5)">{THERMOMETER.replace("COLOUR", palette["muted"])}</g>')
+    out.append(
+        f'<g transform="translate({_n(PLOT_W + 5)}, -6) scale(0.5)">{DROPLET.replace("COLOUR", palette["muted"])}</g>'
+    )
+    for row in range(1, int(PLOT_H // LABEL_DY) + 1):
+        y = row * LABEL_DY
+        celsius = bottom + (PLOT_H - y) / per_degree
+        out.append(
+            text(-5, y, f"{_n(celsius)}{degree_sign}", size=F_SMALL, colour=palette["muted"], anchor="end")
+        )
+        out.append(
+            text(PLOT_W + 5, y, _n((PLOT_H - y) / PX_PER_MM), size=F_SMALL, colour=palette["muted"])
+        )
+
+    # §7 precipitation: one bar per hourly interval, 60 for 61 points, on the
+    # fixed 0..10 mm axis, behind the curve and the icons (§7.1, §7.3).
+    overmax: list[tuple[int, float]] = []
+    for i in range(WINDOW_HOURS):
+        slot = slots[i][1]
+        amount = (slot or {}).get("precipitation")
+        rate = max(0.0, float(amount)) if amount is not None else 0.0
+        if rate <= 0:  # §7.6: no value draws no bar, exactly like a 0.0
+            continue
+        drawn = min(rate * PX_PER_MM, PLOT_H)  # §7.5 clipped to the band top
+        out.append(
+            f'<rect x="{_n(i * STEP + BAR_INSET)}" y="{_n(PLOT_H - drawn)}" width="{_n(BAR_WIDTH)}"'
+            f' height="{_n(drawn)}" fill="{palette["rain"]}"/>'
+        )
+        if rate > MM_MAX:
+            overmax.append((i, rate))
+
+    # §5.5 warm and cold are one path with one gradient, not two paths: two
+    # coincident stops at y(0 °C), which pad to a single colour when the offset
+    # leaves 0..100 % - the correct result for an all-warm or all-frozen window.
+    if readings:
+        zero = y_temp(0.0) / PLOT_H * 100.0
+        out.append(
+            f'<defs><linearGradient id="temperature-curve-gradient" x1="0" y1="0" x2="0" y2="{_n(PLOT_H)}"'
+            ' gradientUnits="userSpaceOnUse" spreadMethod="pad">'
+            f'<stop offset="{_n(zero)}%" stop-color="{palette["warm"]}"/>'
+            f'<stop offset="{_n(zero)}%" stop-color="{palette["cold"]}"/>'
+            f'<stop offset="100%" stop-color="{palette["cold"]}"/></linearGradient></defs>'
+        )
+    runs = [[(x, y_temp(value)) for _, x, value in run] for run in _runs(readings)]
+    spans = [(run[0][0], run[-1][0]) for run in runs]
+    for run in runs:
+        if len(run) < 2:
+            continue  # §4.8: a lone point between two gaps draws no segment
+        out.append(
+            f'<path d="{_curve_path(run)}" fill="none" stroke="url(#temperature-curve-gradient)"'
+            f' stroke-width="{_n(CURVE_STROKE)}"/>'
+        )
+
+    # §7.5 the over-max value, printed on the clipped bar with a bar-coloured
+    # chip behind it: two digits are 15.3 px of ink on an 11.2373 px bar, and
+    # without the chip the overflow lands on the background whenever the
+    # neighbouring hours are dry.
+    for i, rate in overmax:
+        label = str(int(round(rate)))
+        centre = i * STEP + STEP / 2.0
+        ink = len(label) * DIGIT_ADVANCE * F_OVERMAX
+        out.append(
+            f'<rect x="{_n(centre - ink / 2.0 - 2)}" y="0" width="{_n(ink + 4)}" height="{_n(F_OVERMAX)}"'
+            f' fill="{palette["rain"]}"/>'
+        )
+        out.append(text(centre, 6, label, size=F_OVERMAX, colour=palette["overmax"], anchor="middle"))
+
+    # §6 icons, drawn last, over the bars and the curve: 24 px every 2 h,
+    # centred on the odd point index, the bottom 5 px above the curve's highest
+    # point across the box's own width, clamped to the plot top.
+    for i in range(1, WINDOW_HOURS, ICON_EVERY_HOURS):
+        slot = slots[i - 1][1]  # §6.4: the cell's first hour carries the symbol
         icon = _icon_for((slot or {}).get("symbol_code"), icons_dir)
         if icon is None:
             continue
-        centre = CONTENT_LEFT + CONTENT_WIDTH * hour / WINDOW_HOURS
-        left = centre - ICON_BOX / 2.0
-        right = centre + ICON_BOX / 2.0
-        under = [y for x, y in dense if left <= x <= right]
-        if not under:
+        left = i * STEP - ICON_BOX / 2.0
+        run = next((r for r, (x0, x1) in zip(runs, spans) if x0 <= i * STEP <= x1 and len(r) > 1), None)
+        if run is None:
             continue
-        top = min(under) - ICON_CLEARANCE - ICON_BOX
-        top = max(TEMP_TOP, min(TEMP_BOTTOM - ICON_BOX, top))
-        body.append(
-            _inline_icon(
-                icon,
-                prefix=f"wg{hour}_",
-                x=_px(left, k),
-                y=_px(top, k),
-                scale=ICON_BOX * k / 100.0,
+        x0, x1 = run[0][0], run[-1][0]
+        highest = min(_curve_y(run, min(max(left + q, x0), x1)) for q in range(ICON_SAMPLES))
+        out.append(
+            _inline_icon(icon, prefix=f"wg{i}_", x=left, y=max(0.0, highest - ICON_HEADROOM))
+        )
+
+    # §8.3 nothing was ever fetched: the whole frame is drawn above, because
+    # every part of it comes from the clock alone. Only the data is missing.
+    if not readings:
+        out.append(
+            text(PLOT_W / 2.0, PLOT_H / 2.0, "noch keine Daten", size=F_DAY, colour=palette["day"], anchor="middle")
+        )
+        if last_error:
+            out.append(
+                text(
+                    PLOT_W / 2.0, PLOT_H / 2.0 + 20, str(last_error)[:90],
+                    size=F_OVERMAX, colour=palette["muted"], anchor="middle",
+                )
             )
+    out.append("</g>")
+
+    # §3.7 the legend row: yr's own two entries, the wind one dropped.
+    out.append(f'<g transform="translate({_n(GUTTER)}, {_n(ROW_LEGEND)})">')
+    for offset, colour, swatch, caption in (
+        (LEGEND_ENTRIES[0], palette["warm"], f'<rect x="0" y="40%" width="100%" height="20%" fill="{palette["warm"]}"/>', "Temperatur °C"),
+        (LEGEND_ENTRIES[1], palette["rain"], f'<rect x="0" y="0" width="100%" height="100%" fill="{palette["rain"]}"/>', "Niederschlag mm"),
+    ):
+        out.append(
+            f'<g transform="translate({_n(offset)}, 0)">'
+            f'<svg x="0" y="4" width="{_n(SWATCH)}" height="{_n(SWATCH)}">{swatch}</svg>'
+            + text(14, 9, caption, size=F_SMALL, colour=palette["muted"])
+            + "</g>"
         )
+    out.append("</g>")
 
-    # §7 precipitation band.
-    rates = []
-    for _, slot in slots:
-        amount = (slot or {}).get("precipitation")
-        rates.append(max(0.0, float(amount)) if amount is not None else 0.0)
-    peak = max(rates)
-    if peak > 0:  # §7.6 all-zero hides the band
-        scale_top = next((step for step in PRECIP_STEPS if step >= peak), PRECIP_STEPS[-1])  # §7.3
-
-        def y_precip(rate: float) -> float:
-            return PRECIP_BOTTOM - min(1.0, rate / scale_top) * PRECIP_HEIGHT
-
-        xs = [CONTENT_LEFT + CONTENT_WIDTH * i / WINDOW_HOURS for i in range(WINDOW_POINTS)]
-        top_ys = [y_precip(rate) for rate in rates]
-        fill = f"M {_p(xs[0], k)} {_p(PRECIP_BOTTOM, k)}"
-        for x, y in zip(xs, top_ys):
-            fill += f" L {_p(x, k)} {_p(y, k)}"
-        fill += f" L {_p(xs[-1], k)} {_p(PRECIP_BOTTOM, k)} Z"  # §7.1, §7.8 straight joins
-        body.append(f'<path d="{fill}" fill="{palette["precip"]}" fill-opacity="0.55"/>')  # §7.5
-        stroke = "M " + " L ".join(f"{_p(x, k)} {_p(y, k)}" for x, y in zip(xs, top_ys))
-        body.append(
-            f'<path d="{stroke}" fill="none" stroke="{palette["precip"]}"'
-            f' stroke-width="{_n(_px(1.5, k))}"/>'
-        )
-        text(PRECIP_LABEL_X, PRECIP_LABEL_Y, f"{_n(scale_top)} mm/h", size=AXIS_FONT, colour=palette["text"])  # §7.4
-    else:
-        text(CONTENT_LEFT + CONTENT_WIDTH / 2, PRECIP_MID + 4, "kein Niederschlag", size=AXIS_FONT, colour=palette["text"], anchor="middle")  # §7.6
-
-    line(CONTENT_LEFT, PRECIP_BOTTOM, CONTENT_RIGHT, PRECIP_BOTTOM, palette["baseline"])  # §7.2
-
-    # §3.5, §5.6: axis values right-aligned in the gutter; the top one carries the unit.
-    for value in axis_values:
-        label = f"{int(value)} °C" if value == axis_values[-1] else str(int(value))
-        text(AXIS_LABEL_X, y_temp(value) + 4, label, size=AXIS_FONT, colour=palette["text"], anchor="end")
-
-    # §4.4/§4.5 weekday names, centred on their midnight line.
-    for x, weekday in midnights:
-        text(x, WEEKDAY_BASELINE, weekday, size=WEEKDAY_FONT, colour=palette["text"], anchor="middle")
-
-    # §8.2 stale marker, drawn over whatever is under it (§8.4: nothing moves).
-    # show_age forces the same chip on fresh data (ticket 06's debug switch).
+    # §8.2 the age chip, right-aligned to the plot in the legend row, over
+    # whatever is under it (§8.4: nothing moves, no row resizes). show_age
+    # forces the same chip on fresh data.
     age = age_seconds
     if age is None and fetched_at is not None and now is not None:
         age = max(0.0, float(now) - float(fetched_at))
     if (stale or show_age) and age is not None:
-        body.append(
-            f'<rect x="{_n(_px(CHIP_X, k))}" y="{_n(_px(CHIP_Y, k))}"'
-            f' width="{_n(_px(CHIP_WIDTH, k))}" height="{_n(_px(CHIP_HEIGHT, k))}"'
-            f' rx="{_n(_px(CHIP_RADIUS, k))}" fill="{palette["background"]}" fill-opacity="0.85"/>'
+        out.append(
+            f'<rect x="{_n(CHIP_X)}" y="{_n(CHIP_Y)}" width="{_n(CHIP_WIDTH)}" height="{_n(CHIP_HEIGHT)}"'
+            f' rx="{_n(CHIP_RADIUS)}" fill="{palette["background"]}" fill-opacity="0.85"/>'
         )
-        body.append(
-            f'<circle cx="{_n(_px(DOT_X, k))}" cy="{_n(_px(DOT_Y, k))}"'
-            f' r="{_n(_px(DOT_RADIUS, k))}" fill="{palette["stale"]}"/>'
+        out.append(
+            f'<circle cx="{_n(CHIP_X + 8)}" cy="{_n(CHIP_Y + 9)}" r="3" fill="{palette["muted"]}"/>'
         )
-        text(
-            CHIP_TEXT_X,
-            CHIP_TEXT_Y,
-            stale_label(age) if stale else age_label(age),
-            size=AXIS_FONT,
-            colour=palette["stale"],
+        out.append(
+            f'<text x="{_n(CHIP_X + 16)}" y="{_n(CHIP_Y + 13)}" font-family="{FONT_STACK}"'
+            f' font-size="{_n(F_OVERMAX)}" fill="{palette["muted"]}">'
+            f"{html.escape(stale_label(age) if stale else age_label(age))}</text>"
         )
 
-    return _document(width, height, body)
+    out.append("</svg>")
+    return "".join(out)
 
 
 # ---------------------------------------------------------------- rasterising
@@ -568,7 +674,7 @@ def _rasterise(svg: str, width: int, font_path: Path | str | None = None) -> byt
     return resvg_py.svg_to_bytes(
         svg_string=svg,
         width=width,
-        height=round(width / 2),
+        height=height_for(width),
         font_files=[font] if font else None,
         skip_system_fonts=True,
     )
@@ -641,7 +747,7 @@ def fixture_samples(start: float, hours: int = 72, *, dry: bool = False) -> list
 
 
 def _cli(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="render a Wettergraph PNG")
+    parser = argparse.ArgumentParser(description="render a Wettergraph image")
     parser.add_argument("--cache", help="forecast-cache.json to read; without it, a fixture is rendered")
     parser.add_argument("--out", default="wettergraph-sample.png")
     parser.add_argument("--width", type=int, default=DEFAULT_WIDTH)
@@ -660,23 +766,30 @@ def _cli(argv: list[str] | None = None) -> int:
     else:
         fetched_at = arguments.now if arguments.now is not None else time.time()
         samples = fixture_samples(fetched_at, dry=arguments.dry)
-    last_error = None
 
     age_seconds = arguments.age_hours * 3600 if arguments.age_hours is not None else None
-    png = render_png(
-        samples,
+    kwargs = dict(
         fetched_at=fetched_at,
         now=arguments.now,
         stale=age_seconds is not None,
         age_seconds=age_seconds,
-        last_error=last_error,
+        last_error=None,
         width=arguments.width,
         theme=arguments.theme,
         icons_dir=arguments.icons,
-        font_path=arguments.font,
     )
-    Path(arguments.out).write_bytes(png)
-    print(f"rendered {len(samples)} samples -> {arguments.out} ({len(png)} bytes, theme={arguments.theme}, width={clamp_width(arguments.width)})")
+    if str(arguments.out).endswith(".svg"):
+        Path(arguments.out).write_text(build_svg(samples, **kwargs))
+        size = len(Path(arguments.out).read_text())
+    else:
+        png = render_png(samples, font_path=arguments.font, **kwargs)
+        Path(arguments.out).write_bytes(png)
+        size = len(png)
+    width = clamp_width(arguments.width)
+    print(
+        f"rendered {len(samples)} samples -> {arguments.out} ({size} bytes, "
+        f"theme={arguments.theme}, {width}x{height_for(width)})"
+    )
     return 0
 
 
