@@ -20,8 +20,8 @@ Home Assistant OS only (native container installs have no app store).
 3. Reload the store page if needed, then install **Wettergraph**.
 4. **Start** it and open the **Log** tab. First lines:
 
-   `wettergraph: starting on :8099; options=/data/options.json present=True build=0.3.0`
-   `wettergraph: met.no UA='Wettergraph/0.3.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph)' cache=/data/forecast-cache.json`
+   `wettergraph: starting on :8099; options=/data/options.json present=True build=0.3.1`
+   `wettergraph: met.no UA='Wettergraph/0.3.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph)' cache=/data/forecast-cache.json`
    `wettergraph: share target /share/wettergraph/graph.png`
    `wettergraph: render font /usr/share/fonts/dejavu/DejaVuSans.ttf present, icons /app/icons`
 
@@ -48,7 +48,7 @@ Home Assistant OS only (native container installs have no app store).
    wettergraph: PASS  unknown paths 404  (404)
    wettergraph: PASS  options file is readable  (/data/options.json)
    wettergraph: PASS  /forecast.json serves the normalised series  (200 88 samples)
-   wettergraph: PASS  met.no User-Agent is descriptive  (Wettergraph/0.3.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph))
+   wettergraph: PASS  met.no User-Agent is descriptive  (Wettergraph/0.3.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph))
    wettergraph: startup check 17/17 passed
    ```
 
@@ -89,7 +89,7 @@ fetches `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=&lon=`
 writes it to `/data/forecast-cache.json`.
 
 - **User-Agent**, required by met.no:
-  `Wettergraph/0.3.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph)`
+  `Wettergraph/0.3.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph)`
   (`BUILD_VERSION`, so a version bump changes it).
 - **Polling follows met.no's `Expires` header**: the next request is not sent
   before it. Once it has passed, the request carries `If-Modified-Since`, and a
