@@ -54,12 +54,13 @@ DejaVu, so the labels there are Liberation Sans metrics, a hair narrower).
   - temperature panel: `y = 8` to `y = 283`, height `275`
   - gap: `8`
   - precipitation panel: `y = 291` to `y = 383`, height `92`
-- **§3.4** Text is `DejaVu Sans` (Alpine package `font-dejavu`), size `11` for
-  axis values and `12` for weekday names. The renderer loads
-  `/usr/share/fonts/dejavu/DejaVuSans.ttf` by path, not by font discovery. If
-  that file cannot be read, the app logs an error at start and keeps
-  rendering: resvg draws text as nothing when no font answers, so a missing
-  font silently empties every number on the image.
+- **§3.4** Text is `DejaVu Sans, Verdana, sans-serif` (Alpine package
+  `font-dejavu`), size `11` for axis values and `12` for weekday names. The
+  renderer loads `/usr/share/fonts/dejavu/DejaVuSans.ttf` by path, not by font
+  discovery, and resvg never reaches past the first family; the rest is for a
+  browser shown the SVG itself. If that file cannot be read, the app logs an
+  error at start and keeps rendering: resvg draws text as nothing when no font
+  answers, so a missing font silently empties every number on the image.
 - **§3.5** All axis values are right-aligned to `x = 38`, vertically centred on
   their grid line. The gutter is sized for its widest label, `15 °C`.
 

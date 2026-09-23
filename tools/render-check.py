@@ -229,9 +229,12 @@ check("§3.5 the label rows match graph-reference.svg",
       sorted(round(number(el, "y"), 1) for el, _ in axis_labels) == reference_axis_y,
       f"{sorted(round(number(el, 'y'), 1) for el, _ in axis_labels)} vs {reference_axis_y}")
 
-check("§3.4 every text node is DejaVu Sans",
-      all(el.get("font-family") == "DejaVu Sans" for el, _ in parity_texts),
-      str([el.get("font-family") for el, _ in parity_texts if el.get("font-family") != "DejaVu Sans"]))
+# The stack exists for a browser showing the SVG; resvg only ever sees the first
+# name, which is the file it was handed (redesign ticket 00).
+STACK = "DejaVu Sans, Verdana, sans-serif"
+check("§3.4 every text node leads with DejaVu Sans",
+      all(el.get("font-family") == STACK for el, _ in parity_texts),
+      str([el.get("font-family") for el, _ in parity_texts if el.get("font-family") != STACK]))
 
 with_font = render_bytes(parity, font_path=FONT)
 without_font = render_bytes(parity, font_path="/nonexistent/DejaVuSans.ttf")

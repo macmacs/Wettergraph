@@ -164,7 +164,10 @@ all the frame plus `noch keine Daten` and the last error.
   headless Chrome.
 - Font: DejaVu Sans (`font-dejavu` in the image) loaded **by file path**, per
   spec §3.4; resvg draws no text at all when no font answers, so the startup
-  check asserts the file is readable.
+  check asserts the file is readable. Text nodes name the whole stack
+  `DejaVu Sans, Verdana, sans-serif`: resvg stops at the first name and the PNG
+  is unchanged, while a browser handed `/image/graph.svg` directly - where the
+  file path means nothing - falls through to a font the viewer actually has.
 - The intermediate SVG stays at `/image/graph.svg` (same knobs) for debugging;
   the PNG is the published artifact.
 - Samples: `assets/render-sample-light.png`, `render-sample-dark.png`,

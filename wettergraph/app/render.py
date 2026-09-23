@@ -117,6 +117,11 @@ ICONS_DIR = Path(os.environ.get("WG_ICONS", Path(__file__).resolve().parent / "i
 # §3.4: the container path. WG_FONT exists so a box without fonts can still
 # render a check (this development box has none at the container's path).
 FONT_PATH = Path(os.environ.get("WG_FONT", "/usr/share/fonts/dejavu/DejaVuSans.ttf"))
+# The family written into every text node. resvg matches the first name against
+# the file above and never reaches the rest, so the PNG is unchanged; the names
+# after it are for a browser showing /image/graph.svg directly, where the file
+# path means nothing and the viewer's own fonts decide (redesign ticket 00).
+FONT_STACK = "DejaVu Sans, Verdana, sans-serif"
 
 _font_warned = False
 
@@ -370,7 +375,7 @@ def build_svg(
         extra = f' text-anchor="{anchor}"' if anchor else ""
         body.append(
             f'<text x="{_n(_px(x, k))}" y="{_n(_px(y, k))}"'
-            f' font-family="DejaVu Sans" font-size="{_n(_px(size, k))}"{extra}'
+            f' font-family="{FONT_STACK}" font-size="{_n(_px(size, k))}"{extra}'
             f' fill="{colour}">{html.escape(str(value))}</text>'
         )
 
