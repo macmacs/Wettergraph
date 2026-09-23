@@ -1,7 +1,7 @@
 # Do the webp-backed icons hold at 24 px?
 
 Type: prototype
-Status: open
+Status: resolved
 Blocked by: 05
 
 ## Question
@@ -27,3 +27,12 @@ Graduated from the map's fog by [ticket 05](05-redraw-renderer.md): the question
 The sheet's path, the operator's verdict per failing code, and the decided fix for each.
 
 ## Answer
+
+**All 83 hold at 24 px; no code fails, no fix.** Sheet: `.scratch/wettergraph-ha-widget/assets/icon-contact-sheet.png` (1432 x 1692), built by `tools/extract-icons.py`, which kept its 92 px and 28 px columns and gained two 24 px patches per code: a 4 x 3 cell cut of the light (`#ffffff` / grid `#c3d0d8`) and dark (`#020a14` / grid `#374759`) plot, the icon centred on an hour line so its left edge lands off the pixel grid as in a real render (`odd hour x 12.2373 - 12`). 1x pixels, no DPR boost - the harshest case.
+
+Operator verdict, viewed at 100 %: **"moon is a bit dark on dark, rest ok."** The grey moon (`#686E73`) on `#020a14` reads, just dimly - judged a pass, not a failure. Weighed and declined:
+
+- a dark-only light halo behind every icon (one SVG filter, works on the webp art too, but a §6.5 amendment and a risk of every icon looking glowy);
+- yr's dark moon tint `#E1C578` on night codes (trivial on the 2 vector ones, but the ~26 webp night codes would need a second raster set, and it reverses §9.3).
+
+So §6.2, §6.5 and §9.3 stand as written. If the dim moon grates after living with it, the halo filter is the cheap way back in.
