@@ -26,7 +26,7 @@ The shipped version, the operator's confirmation, and the final card configurati
 
 ## Answer
 
-**Shipping as 0.5.0.** Version bumped in `config.yaml`, `metno.APP_VERSION`
+**Shipped as 0.5.0, reshipped as 0.5.1.** Version bumped in `config.yaml`, `metno.APP_VERSION`
 and the README's expected log lines. Before shipping: `tools/addon-lint.py`
 accepts `Wettergraph v0.5.0`; `render-check.py` 89/91, the two FAILs both the
 dev box's missing DejaVu (same known gap as ticket 07), everything the redraw
@@ -34,9 +34,11 @@ touches passes. No delivery change: same `/local/` SVG pair, same card.
 
 ### Operator checklist (HITL)
 
-1. Settings -> Add-ons -> Wettergraph -> **Update** to 0.5.0.
-2. **Log tab.** Expect `build=0.5.0` and `startup check 19/19 passed`. The
-   line to look at: `renderer draws the curve, 30 icons and the bars`.
+1. Settings -> Add-ons -> Wettergraph -> **Update** to 0.5.1.
+2. **Log tab.** Expect `build=0.5.1` and `startup check 20/20 passed`. Lines
+   to look at: `renderer draws the curve, 30 icons and the bars`, and
+   `time zone Europe/Berlin (from ...)` - note whether it says `from TZ` or
+   `from /homeassistant/.storage/core.config`.
 3. **Panel** (the Wettergraph sidebar page): the embedded graph is the new
    wide one, ~794 x 210.
 4. **Dashboard card, current theme.** Reload the dashboard. The card needs no
@@ -56,3 +58,21 @@ touches passes. No delivery change: same `/local/` SVG pair, same card.
 
 **Report:** the two screenshots, the fit verdict (and any `columns` change),
 phone yes/no, refresh yes/no.
+
+### Operator report 1, 2026-09-23: hour labels in UTC (fixed in 0.5.1)
+
+On 0.5.0 a 12:33 CEST dashboard showed a graph starting at `10`. The window
+itself was right - it starts at the render hour, taken from the epoch clock -
+but the labels (and the midnight separators) are drawn with `astimezone()`,
+i.e. in the process's `TZ`, and that was UTC. So Supervisor's `TZ` did not
+reach the Python process; why (s6 env handling, or Supervisor not setting it)
+is not established and does not need to be.
+
+Fix, `localzone.py`: `TZ` if it names a real zone, else `time_zone` from HA's
+`.storage/core.config` (readable through the `homeassistant_config` mapping
+ticket 07 added - no new permission), else UTC. The winner is written back to
+`TZ` + `time.tzset()` before anything renders. Logged at startup, shown on the
+status page, and a startup check FAILs on the UTC fallback. Verified locally
+with `TZ` unset and a fake core.config: log `time zone Europe/Berlin`, first
+hour label `12` at 10:36 UTC. The log line on the box says which source won,
+which is also the answer to whether `TZ` ever arrives.

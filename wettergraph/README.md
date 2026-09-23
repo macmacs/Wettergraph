@@ -22,8 +22,9 @@ Home Assistant OS only (native container installs have no app store).
 3. Reload the store page if needed, then install **Wettergraph**.
 4. **Start** it and open the **Log** tab. First lines:
 
-   `wettergraph: starting on :8099; options=/data/options.json present=True build=0.5.0`
-   `wettergraph: met.no UA='Wettergraph/0.5.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph)' cache=/data/forecast-cache.json`
+   `wettergraph: starting on :8099; options=/data/options.json present=True build=0.5.1`
+   `wettergraph: time zone Europe/Berlin (from /homeassistant/.storage/core.config), local time now 12:36 CEST` (or `from TZ`)
+   `wettergraph: met.no UA='Wettergraph/0.5.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph)' cache=/data/forecast-cache.json`
    `wettergraph: share target /share/wettergraph/graph.png`
    `wettergraph: www target /homeassistant/www/wettergraph/graph-light.svg -> /local/wettergraph/graph-light.svg`
    `wettergraph: www target /homeassistant/www/wettergraph/graph-dark.svg -> /local/wettergraph/graph-dark.svg`
@@ -54,8 +55,9 @@ Home Assistant OS only (native container installs have no app store).
    wettergraph: PASS  unknown paths 404  (404)
    wettergraph: PASS  options file is readable  (/data/options.json)
    wettergraph: PASS  /forecast.json serves the normalised series  (200 88 samples)
-   wettergraph: PASS  met.no User-Agent is descriptive  (Wettergraph/0.5.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph))
-   wettergraph: startup check 19/19 passed
+   wettergraph: PASS  met.no User-Agent is descriptive  (Wettergraph/0.5.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph))
+   wettergraph: PASS  the time axis has a real local zone (graph-spec §4.1)  (Europe/Berlin from TZ, now 12:36 CEST)
+   wettergraph: startup check 20/20 passed
    ```
 
    The byte counts and the sample count are yours; the paths and the check
@@ -103,7 +105,7 @@ fetches `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=&lon=`
 writes it to `/data/forecast-cache.json`.
 
 - **User-Agent**, required by met.no:
-  `Wettergraph/0.5.0 (Home Assistant app; +https://github.com/macmacs/Wettergraph)`
+  `Wettergraph/0.5.1 (Home Assistant app; +https://github.com/macmacs/Wettergraph)`
   (`BUILD_VERSION`, so a version bump changes it).
 - **Polling follows met.no's `Expires` header**: the next request is not sent
   before it. Once it has passed, the request carries `If-Modified-Since`, and a

@@ -140,6 +140,9 @@ otherwise. Clauses below refer to these by name instead of repeating literals.
 - **§4.1** The window is always `60` hours, step `1` hour, `61` points, starting
   at the hour of the render in the app's local time zone. Fixed: a short
   payload leaves no stretched grid, it is filled by §4.8.
+  The local zone is `TZ` if it names a real zone, else `time_zone` from HA's
+  `.storage/core.config`, else UTC with a failing startup check
+  (`localzone.py`); Supervisor's `TZ` was observed not to arrive.
 - **§4.2** Hourly temperature points are joined by a Catmull-Rom spline,
   converted to cubic Bézier segments, tension `1/6`, both ends duplicated (§0).
   No resampling, no averaging.

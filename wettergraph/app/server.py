@@ -38,6 +38,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import localzone
 import metno
 import publish
 import render
@@ -45,6 +46,8 @@ import render
 OPTIONS_PATH = Path(os.environ.get("WG_OPTIONS", "/data/options.json"))
 DATA_DIR = Path("/data")
 STARTED_AT = time.time()
+# (zone, source) once main() has resolved it; see localzone.py.
+ZONE = ("UTC", "not resolved yet")
 
 # Ticket 06, cache-busting. HA's own camera view (/api/camera_proxy) sends no
 # cache headers at all, so the browser's guarantee is the camera access token,
@@ -203,6 +206,8 @@ def data_html() -> str:
         f"<p>forecast data: <b>{len(view['samples'])}</b> samples, last fetch {age_text(view['age_seconds'])} ago "
         f"({state}), outcome <code>{html.escape(view['last_outcome'])}</code>, "
         f"last error <code>{html.escape(view['last_error'] or 'none')}</code></p>"
+        f"<p>time zone: <b>{html.escape(ZONE[0])}</b> (from <code>{html.escape(ZONE[1])}</code>), "
+        f"local time now {time.strftime('%H:%M %Z')}</p>"
         f"<p>met.no cache: <code>{html.escape(view['cache_path'])}</code> - raw view at "
         f"<code>/forecast.json</code></p>"
     )
@@ -662,6 +667,14 @@ def run_checks(bind_port: int = 0) -> list[tuple[str, bool, str]]:
         )
     )
 
+    checks.append(
+        (
+            "the time axis has a real local zone (graph-spec §4.1)",
+            not ZONE[1].startswith("fallback"),
+            f"{ZONE[0]} from {ZONE[1]}, now {time.strftime('%H:%M %Z')}",
+        )
+    )
+
     httpd.shutdown()
     return checks
 
@@ -676,7 +689,9 @@ def report(checks: list[tuple[str, bool, str]]) -> int:
 
 
 def main() -> None:
-    global CACHE
+    global CACHE, ZONE
+    # First, before anything renders: the hour labels are drawn in local time.
+    ZONE = localzone.apply()
     port = int(os.environ.get("WG_PORT", "8099"))
     print(
         f"wettergraph: starting on :{port}; options={OPTIONS_PATH} "
@@ -684,6 +699,7 @@ def main() -> None:
         flush=True,
     )
     CACHE = cache_for(options())
+    print(f"wettergraph: time zone {ZONE[0]} (from {ZONE[1]}), local time now {time.strftime('%H:%M %Z')}", flush=True)
     print(f"wettergraph: met.no UA={metno.USER_AGENT!r} cache={CACHE.cache_path()}", flush=True)
     # Every file exists before anyone asks for it, so a Local file camera or a
     # /local/ card added later has something to show (publish.py).
