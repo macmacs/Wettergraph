@@ -235,6 +235,11 @@ the file directly, so no port, no HTTP, and nothing to reach. `/config` is *not*
 usable for this: inside an app container `/config` is the app's own public
 config folder, not Home Assistant's.
 
+The file copy carries no age chip: `&age=1` is a URL switch and a file has no
+URL. Its freshness is the `shared copy: ... written 4 min ago` line on the
+status page (served through ingress, so it is still readable on exactly the
+install where the port is blocked) and the `share wrote ...` line in the log.
+
 ## Configuration
 
 | Option | Default | Meaning |

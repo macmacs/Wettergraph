@@ -2,6 +2,7 @@
 
 **Label:** `wayfinder:map`
 **Destination:** the widget renders on the dashboard, updates on its own schedule, shows no wind band and no wind data.
+**Status:** reached (2026-09-23) - every ticket is resolved. The operator confirmed the graph on the dashboard, that it refreshes with nobody touching it, and the file fallback.
 
 > **This map carries execution.** Unlike the wayfinder default, resolving a ticket here means producing working pieces of the widget, not only decisions.
 
@@ -28,7 +29,7 @@ Open tickets are not listed here - they are the files in `issues/`, found by sca
 - [Extract the yr weather icon set](issues/03-extract-yr-icon-set.md) - resolved
 - [met.no client and forecast cache](issues/04-metno-client-cache.md) - resolved
 - [Render the graph: temperature, icons, precipitation](issues/05-render-graph.md) - resolved
-- [Auto-updating image endpoint and generic camera](issues/06-image-endpoint-generic-camera.md) - claimed; built, answer recorded in the ticket, waiting on the operator's install report
+- [Auto-updating image endpoint and generic camera](issues/06-image-endpoint-generic-camera.md) - resolved
 
 ## Decisions so far
 
@@ -39,12 +40,13 @@ Open tickets are not listed here - they are the files in `issues/`, found by sca
 - [Extract the yr weather icon set](issues/03-extract-yr-icon-set.md): 83 met.no codes under `.scratch/wettergraph-ha-widget/assets/icons/` + `index.json`; 7 vector from the meteogram, 76 wrapping the app's webp art (the same MET art); contact sheet `assets/icon-contact-sheet.png`; extraction by `tools/extract-icons.py`.
 - [met.no client and forecast cache](issues/04-metno-client-cache.md): the data side is `wettergraph/app/metno.py` (stdlib only) - an `Expires`-respecting poller with `If-Modified-Since`/304, last-good cache at `/data/forecast-cache.json`, series `{time, temperature, precipitation, symbol_code}` in °C and mm/h, `403`/`429` named and backed off; UA `Wettergraph/0.1.2 (Home Assistant app; +https://github.com/macmacs/Wettergraph)`; 88 samples live; operator confirmed `metno: 200 OK` and 9/9 on HAOS.
 - [Render the graph: temperature, icons, precipitation](issues/05-render-graph.md): the renderer is `wettergraph/app/render.py` (Python + `resvg-py` pinned in `wettergraph/app/uv.lock`, no browser) - one SVG in design units, everything scaled by `k = W/782`, rasterised once; the font is loaded by file path (`/usr/share/fonts/dejavu/DejaVuSans.ttf`, spec §3.4; `font-dejavu` in the Dockerfile); `server.py` serves `/image/graph` as a PNG (plus `/image/graph.svg`) with `?width` (480..1564) and `?theme=light|dark`; `tools/render-check.py` checks the SVG against `assets/graph-reference.svg` clause for clause (57/57) and the committed samples live under `.scratch/wettergraph-ha-widget/assets/`; operator confirmed the log's `startup check 13/13 passed`, the panel graph and the dark variant on HAOS - 0.2.1 had to switch the status page to relative links because root-absolute paths 404 behind ingress.
+- [Auto-updating image endpoint and generic camera](issues/06-image-endpoint-generic-camera.md): delivery is HA's built-in **Generic Camera** (config-flow only; the current integration has no `frame_interval`, so nothing was set from `update_interval`) polling `http://<ha-host>:8099/image/graph` with `?width` (480..1564), `?theme=light|dark` and `&age=1` as the freshness probe; the app's `image_width`/`image_theme` options decide the served default while `update_interval` is the data floor (met.no's `Expires` wins, ~30-60 min) and HA picks a new frame up about every 5 min by rotating the camera token; the image is served `no-store` + `Pragma: no-cache` with `X-Wettergraph-Age`; a change-driven copy of the same PNG goes to `/share/wettergraph/graph.png` (`map: - share:rw`, `app/publish.py`) for the **Local file** camera when HA cannot reach the port, and that copy deliberately carries no age chip (it would rewrite the file every minute); version 0.3.0, startup check 17/17, operator confirmed the dashboard graph, its own refresh, and the file fallback on HAOS.
 
 ## Not yet specified
 
 <!-- in-scope fog: suspected questions not yet sharp enough to ticket -->
 
-_(empty - the frontier is specifiable; anything newly surfaced lands here or becomes a ticket)_
+_(empty - the destination is reached; the frontier ended at ticket 06)_
 
 ## Out of scope
 

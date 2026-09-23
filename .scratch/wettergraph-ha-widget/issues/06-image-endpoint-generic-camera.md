@@ -1,7 +1,7 @@
 # Auto-updating image endpoint and generic camera
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 05
 
 ## Question
@@ -106,6 +106,15 @@ no disk writes on a quiet hour. Tried on this box: first write, second call a
 no-op, changed bytes rewritten, no leftover `.tmp`, and an unwritable path
 reports once instead of every cycle.
 
+**The file copy carries no age chip, on purpose.** `&age=1` is a URL switch and
+a file has no URL, so the published PNG never gets it. Putting the chip into the
+file would be worse than it sounds: its text changes every minute, so the copy
+would be rewritten 1440 times a day onto whatever card HAOS runs on. The file
+route's freshness is read instead from the file's own mtime - the status page's
+`shared copy: ... written 4 min ago` line, which is served through ingress and
+so still readable on exactly the install where the port is blocked - and from
+the `share wrote ...` line the app logs whenever the picture changes.
+
 **Evidence on this box.**
 
 - `server.py --self-test` -> **17/17** (was 13), including the option-driven
@@ -137,12 +146,13 @@ Operator adds the camera config, restarts, sees the graph on the dashboard, and 
   every 5 minutes. *(operator, 2026-09-23 - step 3 reported working)*
 - [ ] The dialog has **no `frame_interval`** field (confirming the answer's
   cadence finding), and *Frame rate* is left at its default.
-- [ ] The fallback was **tried once**: a Local file camera with
-  `/share/wettergraph/graph.png` shows the same graph.
+- [x] The fallback was **tried once**: a Local file camera with
+  `/share/wettergraph/graph.png` shows the same graph. *(operator, 2026-09-23)*
 
 **Operator report (2026-09-23).** Steps 1-3 work: 0.3.0 installed, the Generic
-Camera added, and the graph on the dashboard refreshes on its own. The Local
-file camera was added as well, but it had not been put on a card at that point,
-so the fallback box stays open until the picture is seen there. The
-`frame_interval` box is a source-code fact rather than something the operator
+Camera added, and the graph on the dashboard refreshes on its own. Step 4 works
+too, once the Local file camera was put on a card: the same graph shows there.
+One honest note from that check: the file copy has **no age chip**, because the
+chip is a URL switch (`&age=1`) and a file has no URL - see the Answer. The
+`frame_interval` box stays a source-code fact rather than something the operator
 reported.
