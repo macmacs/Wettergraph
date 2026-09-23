@@ -166,3 +166,18 @@ Install **0.4.0**; the log should read `build=0.4.0`.
 Note this ships **today's** graph, not the redesign. That is deliberate: the
 delivery plumbing is proved end-to-end now, so ticket 05's redraw only changes
 pixels.
+
+### Operator report, 2026-09-23
+
+**Confirmed: the conditional card works, both themes.** The `/local/` SVG pair
+renders on the dashboard and the `sun.sun` conditional swaps light for dark.
+
+**The restart trap was real, not theoretical.** It worked *after the reboot* -
+so HA had to register `/local/` at startup before the newly created `www`
+folder was served. Any future install on a box without a `www` folder hits the
+same thing; the log's `NOTE created ... restart Home Assistant once` line is
+the one to read.
+
+Not yet reported, carried to [ticket 06](06-ship-and-confirm.md): refresh over
+time (does the picture follow the data rather than sticking), and reach from
+the phone / outside the LAN - the thing port 8099 could never do.
