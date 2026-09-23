@@ -127,15 +127,22 @@ Operator adds the camera config, restarts, sees the graph on the dashboard, and 
 
 - [x] Local: self-test 17/17, render-check 57/57, addon-lint, the publisher's
   write/no-write/atomic behaviour, junk options clamped, `?age=1` chip.
-- [ ] The store offers **0.3.0**; after the update the log shows
+- [x] The store offers **0.3.0**; after the update the log shows
   `share target /share/wettergraph/graph.png`, `share wrote ...`, and
-  `startup check 17/17 passed`.
-- [ ] Generic Camera added with the URL above: the preview shows the graph, and
-  the card on the dashboard shows it.
+  `startup check 17/17 passed`. *(operator, 2026-09-23)*
+- [x] Generic Camera added with the URL above: the preview shows the graph, and
+  the card on the dashboard shows it. *(operator, 2026-09-23)*
+- [x] It refreshes with nobody touching it: with `&age=1` in the URL the chip's
+  minutes move within ~10 minutes, and the log shows a GET from HA's IP about
+  every 5 minutes. *(operator, 2026-09-23 - step 3 reported working)*
 - [ ] The dialog has **no `frame_interval`** field (confirming the answer's
   cadence finding), and *Frame rate* is left at its default.
-- [ ] It refreshes with nobody touching it: with `&age=1` in the URL the chip's
-  minutes move within ~10 minutes, and the log shows a GET from HA's IP about
-  every 5 minutes.
 - [ ] The fallback was **tried once**: a Local file camera with
   `/share/wettergraph/graph.png` shows the same graph.
+
+**Operator report (2026-09-23).** Steps 1-3 work: 0.3.0 installed, the Generic
+Camera added, and the graph on the dashboard refreshes on its own. The Local
+file camera was added as well, but it had not been put on a card at that point,
+so the fallback box stays open until the picture is seen there. The
+`frame_interval` box is a source-code fact rather than something the operator
+reported.
