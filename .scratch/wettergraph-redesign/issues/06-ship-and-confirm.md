@@ -1,7 +1,7 @@
 # Ship the new look and confirm it on the dashboard
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 05, 07
 
 ## Question
@@ -76,3 +76,27 @@ status page, and a startup check FAILs on the UTC fallback. Verified locally
 with `TZ` unset and a fake core.config: log `time zone Europe/Berlin`, first
 hour label `12` at 10:36 UTC. The log line on the box says which source won,
 which is also the answer to whether `TZ` ever arrives.
+
+### Operator report 2, 2026-09-23: confirmed on 0.5.1
+
+- **Time zone:** `time zone Europe/Berlin (from /homeassistant/.storage/core.config), local time now 12:37 CEST`.
+  So Supervisor's `TZ` **never reaches the process**; the HA-config fallback
+  is what carries it, not a belt-and-braces extra. Hour labels now read local.
+- **Look:** light and dark both match the reference.
+- **Card fit:** fits as is. **Final card = ticket 07's YAML unchanged**
+  (`/local/wettergraph/graph-{light,dark}.svg`, `sun.sun` conditional,
+  `refresh_interval: 600`, `grid_options: rows: auto, columns: 18`). No
+  `image_width` / `image_theme` change: the card scales the SVG itself.
+- **Phone:** companion app, all labels and both axes legible - closes ticket
+  00's desktop-only caveat.
+- **Refresh:** proven from the operator's log
+  (`2ee081f0_wettergraph_2026-09-23T10-39-28.177Z.log`): the publisher
+  rewrote both SVGs as the data moved (`write #3`, `#4`, `#5`), and the card
+  defeats `/local/` caching with its own `?currentTimeCache=` (ticket 07). Not
+  watched on the glass over an hour; accepted on that evidence.
+- **Side observation, same log:** 177 `code 400, Bad request version` lines
+  from `10.0.1.145` - a TLS handshake arriving on the plain-HTTP port 8099.
+  Something on the LAN is calling `https://<ha>:8099`. Harmless to the
+  graph, noisy in the log; left to the map's fog.
+
+**Shipped: 0.5.1.**
