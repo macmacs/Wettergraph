@@ -345,7 +345,7 @@ def page_html(opts: dict, host: str | None = None) -> str:
 <h1>Wettergraph</h1>
 <p>Rendering is live: the image below is the cached met.no series drawn to
 <code>assets/graph-spec.md</code>. Temperature curve, weather icons, precipitation
-band; no wind. <code>?width=</code> (480-1564) and <code>?theme=dark</code> are
+band; no wind. <code>?width=</code> (560-1588) and <code>?theme=dark</code> are
 per-request; without them the options decide.</p>
 <p><code>{OPTIONS_PATH}</code> - read fresh on every request.</p>
 <table>{rows}</table>
@@ -396,9 +396,11 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
 
-        # The published artifact is the PNG (graph-spec §1.5). width and theme
-        # are clamped/validated inside the renderer (§1.2, §2.2); without them
-        # the options decide. ?age=1 forces the §8.2 age chip on fresh data.
+        # The PNG is the Generic Camera's copy of the published SVG (graph-spec
+        # §1.1): HA fetches this one server-side, so no browser sees it. Width
+        # and theme are clamped and validated inside the renderer (§1.2, §2.2);
+        # without them the options decide. ?age=1 forces the §8.2 chip on fresh
+        # data.
         if path in ("/image/graph", "/image/graph.png"):
             view = current_view()
             width, theme = image_options(opts)
@@ -524,11 +526,11 @@ def run_checks(bind_port: int = 0) -> list[tuple[str, bool, str]]:
     height = int.from_bytes(body[20:24], "big") if len(body) >= 24 else 0
     checks.append(
         (
-            f"/image/graph serves a PNG at the option width ({opt_width}x{round(opt_width / 2)})",
+            f"/image/graph serves a PNG at the option width ({opt_width}x{render.height_for(opt_width)})",
             status == 200
             and "png" in ctype
             and body[:8] == b"\x89PNG\r\n\x1a\n"
-            and (width, height) == (opt_width, round(opt_width / 2)),
+            and (width, height) == (opt_width, render.height_for(opt_width)),
             f"{status} {ctype} {len(body)}B {width}x{height}",
         )
     )
@@ -544,12 +546,12 @@ def run_checks(bind_port: int = 0) -> list[tuple[str, bool, str]]:
         )
     )
 
-    status, ctype, body = fetch("/image/graph?width=480&theme=dark")
+    status, ctype, body = fetch("/image/graph?width=560&theme=dark")
     width = int.from_bytes(body[16:20], "big") if len(body) >= 24 else 0
     checks.append(
         (
             "/image/graph honours ?width (clamped) and ?theme over the options",
-            status == 200 and width == 480,
+            status == 200 and width == 560,
             f"{status} {width}px against the option's {opt_width}px ({opt_theme})",
         )
     )
@@ -569,12 +571,16 @@ def run_checks(bind_port: int = 0) -> list[tuple[str, bool, str]]:
         now = time.time()
         fixture = render.fixture_samples(now)
         fixture_svg = render.build_svg(fixture, fetched_at=now, now=now)
-        icons_drawn = fixture_svg.count("<g transform")
-        ok = 'stroke="#d81e05"' in fixture_svg and " mm/h" in fixture_svg and icons_drawn == 16
+        icons_drawn = fixture_svg.count("scale(0.24)")
+        ok = (
+            'stroke="url(#temperature-curve-gradient)"' in fixture_svg
+            and "Niederschlag mm" in fixture_svg
+            and icons_drawn == 30
+        )
         detail = f"{len(fixture_svg)}B SVG, {icons_drawn} icons"
     except Exception as exc:  # noqa: BLE001 - a broken renderer must be reported, not fatal
         ok, detail = False, f"renderer raised {exc!r}"
-    checks.append(("renderer draws the curve, 16 icons and the band (fixture)", ok, detail))
+    checks.append(("renderer draws the curve, 30 icons and the bars (fixture)", ok, detail))
 
     # Ticket 06's one visible freshness signal: the §8.2 chip, forced on fresh
     # data by ?age=1, with minutes under an hour so it visibly moves.

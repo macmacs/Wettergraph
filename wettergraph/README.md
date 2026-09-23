@@ -41,12 +41,12 @@ Home Assistant OS only (native container installs have no app store).
    wettergraph: PASS  page lists every option  (7 rows for 7 options)
    wettergraph: PASS  option values reach the page  (image_theme='light')
    wettergraph: PASS  the page carries the Generic Camera URL and the file fallback  (3597B page)
-   wettergraph: PASS  /image/graph serves a PNG at the option width (782x391)  (200 image/png 24875B 782x391)
+   wettergraph: PASS  /image/graph serves a PNG at the option width (794x210)  (200 image/png 45943B 794x210)
    wettergraph: PASS  the image is served uncacheable and reports its data age  ('no-store, no-cache, must-revalidate, max-age=0' age='121')
-   wettergraph: PASS  /image/graph honours ?width (clamped) and ?theme over the options  (200 480px against the option's 782px (light))
+   wettergraph: PASS  /image/graph honours ?width (clamped) and ?theme over the options  (200 560px against the option's 794px (light))
    wettergraph: PASS  /image/graph.svg serves the intermediate SVG, no wind  (200 image/svg+xml; charset=utf-8 36769B)
    wettergraph: PASS  render font is readable (graph-spec §3.4)  (/usr/share/fonts/dejavu/DejaVuSans.ttf)
-   wettergraph: PASS  renderer draws the curve, 16 icons and the band (fixture)  (43601B SVG, 16 icons)
+   wettergraph: PASS  renderer draws the curve, 30 icons and the bars (fixture)  (74638B SVG, 30 icons)
    wettergraph: PASS  ?age=1 draws the age chip (the card's only moving pixel)  (chip reads 'vor 5 min' 5 min after the fetch)
    wettergraph: PASS  the fallback copy is in step (/share/wettergraph/graph.png)  (24875B on disk, 24875B served, 0 write(s) this run)
    wettergraph: PASS  the light dashboard SVG is in step (/local/wettergraph/graph-light.svg)  (36769B on disk, 36769B rendered, 0 write(s) this run)
@@ -149,27 +149,36 @@ Expected measurements:
 
 - Container memory: a few tens of MB (python3 + resvg, no browser).
 - Startup to a served page: a few seconds.
-- One render: ~70 ms at 782 px with 16 icons, so a polled camera is cheap.
+- One render: ~140 ms at 794 px with 30 icons on the dev box (61 ms of that
+  is the SVG, the rest resvg), roughly twice the retired 16-icon layout.
+  Still cheap for a camera polled every few minutes; the dashboard card
+  reads the published SVG and costs nothing per view.
 - `curl http://<ha-host>:8099/health` -> `ok`, if the port is reachable from
   where you run curl. The sidebar UI works over ingress regardless.
 
 ## The graph (ticket 05)
 
-`GET /image/graph` is the artifact: a PNG of `width x round(width/2)` (782x391
-by default) drawn from the cached series to `assets/graph-spec.md` clause for
-clause. Two per-request knobs, both validated by the renderer:
+The published artifact is an **SVG**, written to HA's own `www/wettergraph/`
+and served at `/local/` (redesign tickets 00 and 07). `GET /image/graph.svg`
+serves the same file; `GET /image/graph` rasterises it for the Generic Camera,
+which HA fetches server-side. The graph is a **clone of yr's meteogram without
+the wind band and without the yr/NRK header**, drawn to `assets/graph-spec.md`
+clause for clause. Two per-request knobs, both validated by the renderer:
 
-- `?width=` - clamped to 480..1564 (`assets/graph-spec.md` §1.2); junk falls
-  back to 782.
+- `?width=` - the intrinsic size, `width x round(width * 210/794.2373)`,
+  clamped to 560..1588 (`assets/graph-spec.md` §1.2); junk falls back to 794.
+  The card scales the SVG to its tile, so this mostly sets the PNG's size.
 - `?theme=light|dark` - anything unknown is light (§2.2).
 
-What the image holds: a 48 h window from the hour of the last fetch, a
-Catmull-Rom temperature curve (2.5 px) on an axis fitted in 5 °C steps with one
-reserved step at the top, one icon every 3 h from `wettergraph/app/icons/`
-(ticket 03's 83 MET codes, chosen by `symbol_code`, riding 3 px above the
-curve), a precipitation band whose scale top is the smallest of
-`{0.5, 1, 2, 5, 10, 20}` mm/h that fits, and German weekday names on the local
-midnights. No wind of any kind, no attribution text - both are on purpose.
+What the image holds: a 60 h window from the hour of the **render**, its tail
+interpolated out of met.no's 6-hourly entries (§4.8); yr's cell grid with a
+day separator at every local midnight; a Catmull-Rom temperature curve (2 px)
+whose red/blue split is one gradient at 0 °C, on a band fitted by the §5.1
+ladder (10 rows, 1/2/3/5/10 °C a row); hourly rain bars on a **fixed** 0..10
+mm/h axis; a °C axis left and an mm axis right, each with yr's own glyph;
+hour labels every 2 h; German numeric day labels; one 24 px icon every 2 h from
+`wettergraph/app/icons/` (83 MET codes, chosen by `symbol_code`); and yr's
+legend row. No wind of any kind, no attribution text - both are on purpose.
 
 Degrading honestly: over 6 h since the last successful fetch the last good
 graph is served plus the age chip (`vor 7 h`, `vor 3 Tagen`); with no cache at
@@ -247,7 +256,7 @@ that image on its own schedule. Still the route for a **Picture entity** card
 or anything that wants a `camera.` entity.
 
 1. Settings -> Devices & services -> **Add integration** -> **Generic Camera**.
-2. **Still Image URL**: `http://<ha-host>:8099/image/graph?width=782&theme=light`
+2. **Still Image URL**: `http://<ha-host>:8099/image/graph?width=794&theme=light`
    (`<ha-host>` is the address you use for Home Assistant; `/image/graph` alone
    works too and then follows the app's options). Leave **Stream Source** empty.
 3. Leave the advanced section at its defaults. **The `frame_interval` option
@@ -281,7 +290,7 @@ Without the switch the image carries no clock at all (§9.4).
   response headers, including `X-Wettergraph-Age` (seconds since the last
   successful met.no fetch) and the cache headers above.
 - The app log prints one line per request the camera makes, from HA's own IP:
-  `wettergraph: <ha-ip> "GET /image/graph?width=782&theme=light HTTP/1.1" 200`.
+  `wettergraph: <ha-ip> "GET /image/graph?width=794&theme=light HTTP/1.1" 200`.
   A line every ~5 minutes is the dashboard refreshing itself.
 - `http://<ha-host>:8099/` shows the URL to paste, the cadence it is running
   with, and the state of the `/share` copy.
@@ -313,13 +322,13 @@ install where the port is blocked) and the `share wrote ...` line in the log.
 | `latitude` | `48.1746` | 4 decimals on purpose: met.no caches on ~4 decimals. |
 | `longitude` | `11.5538` | Same reason. |
 | `update_interval` | `15` | Minutes between refreshes. Used when met.no serves no `Expires` header; `Expires` wins when present. |
-| `image_width` | `782` | Width of the image the app serves when the URL asks for nothing, clamped to 480..1564 (graph-spec §1.2). Height is always `width / 2`. |
+| `image_width` | `794` | Width of the image the app serves when the URL asks for nothing, clamped to 560..1588 (graph-spec §1.2). Height follows the design canvas, `round(width * 210/794.2373)`. |
 | `image_theme` | `light` | `light` or `dark` when the URL asks for nothing (§2.2). |
 
 The last two are the **defaults**: the status page's own image, the `/share`
 copy and any bare `/image/graph` follow them, while `?width=` and `?theme=` in a
 URL still win per request, so one dashboard can be dark at 1044 px while another
-is light at 782. Change either under **Configuration** and the next request uses
+is light at 794. Change either under **Configuration** and the next request uses
 it - no rebuild, nothing to reinstall.
 
 ## How it is built

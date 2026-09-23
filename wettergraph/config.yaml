@@ -49,7 +49,7 @@ options:
   latitude: 48.1746
   longitude: 11.5538
   update_interval: 15
-  image_width: 782
+  image_width: 794
   image_theme: light
 schema:
   page_note: str
@@ -60,5 +60,5 @@ schema:
   # The two knobs the served image follows when the URL asks for nothing
   # (graph-spec §1.2 clamps, §2.2 falls back to light). A dashboard URL can
   # still override both per request.
-  image_width: int(480,1564)
+  image_width: int(560,1588)
   image_theme: list(light|dark)
